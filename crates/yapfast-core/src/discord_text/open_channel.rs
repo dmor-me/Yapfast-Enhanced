@@ -186,7 +186,11 @@ impl OpenChannel {
         done: &UnboundedSender<Done>,
         previews: SharedPreviews,
     ) -> Option<Self> {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static NEXT_OPEN: AtomicU32 = AtomicU32::new(1);
+
         let mut open = Self::new(room)?;
+        open.generation = u64::from(NEXT_OPEN.fetch_add(1, Ordering::Relaxed)) << 32;
         open.previews = previews;
         if let Some(parent) = discord
             .snapshots()
@@ -459,6 +463,22 @@ impl OpenChannel {
                 self.shown.messages.insert(order, message);
             }
         }
+    }
+
+    pub(super) fn preview_sources(&self) -> HashSet<String> {
+        self.shown
+            .messages
+            .values()
+            .chain(
+                self.latest
+                    .iter()
+                    .flat_map(|latest| latest.messages.values()),
+            )
+            .flat_map(|message| &message.attachments)
+            .flat_map(|attachment| attachment.preview_url.iter().chain(&attachment.still_url))
+            .chain(self.pictures.keys())
+            .cloned()
+            .collect()
     }
 
     /// Keeps recent message metadata when closing, of the channel's newest

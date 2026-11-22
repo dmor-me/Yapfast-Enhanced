@@ -839,6 +839,7 @@ impl Tracker {
                     self.presences.get(user).cloned().unwrap_or_default()
                 };
                 ListedMember {
+                    bot: names.is_bot(user),
                     user_id: user.clone(),
                     name: names.user_name(user).unwrap_or("Discord user").to_owned(),
                     username: names.username(user).map(str::to_owned),

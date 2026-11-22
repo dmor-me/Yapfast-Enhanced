@@ -2,6 +2,7 @@ import { ListView } from "scrollview.slint";
 import { Theme, Tip, ReactionHover, Middle, Label } from "theme.slint";
 import { ActionButton, IconButton, Avatar, Picture, Skeleton, SpoilerCover, MenuItem, TextField } from "controls.slint";
 import { FavoriteStar, GifFavorites } from "gifs.slint";
+import { PluginPart, PluginWidgets } from "plugins.slint";
 
 /// An emoji: what shows, its name, and the reaction it adds, which for a custom
 /// emoji is Discord's `name:id`. A custom emoji shows its `picture` once it has
@@ -409,6 +410,7 @@ export struct MessageRow {
     /// The Discord thread it started or tells of, by room id, empty for
     /// none; its name, and how many messages it has.
     thread-room: string, thread-name: string, thread-detail: string,
+    plugin: [PluginPart],
 }
 
 // The emoji picker: a search, the emoji in rows under their headings, a
@@ -1232,6 +1234,7 @@ export component MessageContent inherits VerticalLayout {
     callback view-image(string, int);
     callback save-attachment(string, int);
     callback media-menu(string, int, bool, length, length);
+    callback plugin-acted(string, string, string, string, string);
     HorizontalLayout {
         padding-left: root.start-padding; padding-right: root.end-padding; padding-top: 2px; padding-bottom: 2px; spacing: 16px;
         Rectangle {
@@ -1358,6 +1361,10 @@ export component MessageContent inherits VerticalLayout {
                 reveal-attachment(id, index) => { root.reveal-attachment(id, index); }
                 view-image(id, index) => { root.view-image(id, index); }
                 media-menu(id, index, video, x, y) => { root.media-menu(id, index, video, x, y); }
+            }
+            for part in message.plugin: PluginWidgets {
+                part: part; subject: message.item;
+                acted(plugin, slot, id, value, subject) => { root.plugin-acted(plugin, slot, id, value, subject); }
             }
             if message.thread-room != "": ThreadChip {
                 name: message.thread-name; detail: message.thread-detail;

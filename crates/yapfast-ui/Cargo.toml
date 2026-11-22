@@ -11,9 +11,19 @@ description = "Yapfast's compiled Slint interface, kept apart so Rust changes el
 # No documentation examples run as tests: rustdoc would read the whole
 # crate on every `cargo test` for none.
 doctest = false
+# It has no tests either: a test target would compile the generated code a
+# second copy, several GiB of memory, beside the library.
+test = false
+
+[features]
+# Loads ui/ at runtime and reloads it on each save, for UI work; see
+# docs/building.md.
+live-preview = ["slint/live-preview"]
 
 [dependencies]
-slint.workspace = true
+# Outside the workspace (see the root Cargo.toml), so it can't inherit Slint:
+# keep this as the root's [workspace.dependencies] has it.
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-18", "backend-winit", "renderer-skia", "renderer-skia-opengl", "accessibility", "unstable-winit-030", "unstable-fontique-011"] }
 
 [build-dependencies]
 slint-build = "=1.18.1"

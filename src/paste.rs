@@ -145,6 +145,8 @@ fn percent_decode(text: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    // This URI-list parser is used by the Linux clipboard; Windows uses CF_HDROP.
+    #[cfg(target_os = "linux")]
     #[test]
     fn reads_local_files_from_a_uri_list() {
         let dir = tempfile::tempdir().unwrap();

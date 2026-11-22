@@ -1,8 +1,10 @@
+import { ClientStyle } from "yapfast/style.slint";
 import { ListView } from "scrollview.slint";
 import { Theme, Tip, Middle, Label } from "theme.slint";
 import { Avatar, PictureStore, StatusText } from "controls.slint";
 import { DiscordBadge } from "discord.slint";
 import { PersonRow, LivePill } from "voice.slint";
+import { PluginRowButton, PluginSurfaces } from "plugins.slint";
 
 /// A server in a closed folder's tile: its icon, or its initial.
 export struct FolderServer { initial: string, picture-url: string }
@@ -342,7 +344,7 @@ export component ChannelRow inherits Rectangle {
     /// A right click, or the Menu key or Shift+F10 when focused: where to open
     /// a menu in the window.
     callback context-menu(length, length);
-    height: root.person ? 42px : 34px;
+    height: root.person ? 42px : ClientStyle.channel-row-height;
     border-radius: 6px;
     background: root.selected ? Theme.active : pointer.has-hover ? Theme.hover : transparent;
     animate background { duration: 90ms; }
@@ -592,6 +594,15 @@ export component ServerRail inherits Rectangle {
                     context-menu(x, y) => { root.open-server-menu(server.id, x, y); }
                 }
             }
+        }
+        // What plugins put at the foot of the rail, from their manifests: each
+        // says whose it is, and choosing one reports the plugin and action.
+        if PluginSurfaces.rail-items.length > 0: Rectangle { height: 1px;
+            Rectangle { width: 32px; height: 1px; background: Theme.line; }
+        }
+        for entry in PluginSurfaces.rail-items: PluginRowButton {
+            entry: entry; named: true;
+            clicked => { PluginSurfaces.row-acted(entry.plugin, entry.id); }
         }
     }
 }

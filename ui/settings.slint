@@ -19,6 +19,8 @@ export component SettingsHeading inherits Text {
 // either, or Space or Enter with the keyboard, toggles it.
 export component SettingsSwitch inherits Rectangle {
     in property <string> text;
+    in property <string> label: root.text;
+    in property <bool> controlled;
     in property <string> description;
     in-out property <bool> checked;
     in property <bool> enabled: true;
@@ -26,6 +28,7 @@ export component SettingsSwitch inherits Rectangle {
     height: column.preferred-height;
     function toggle() {
         if root.enabled {
+            if root.controlled { root.toggled(!root.checked); return; }
             root.checked = !root.checked;
             root.toggled(root.checked);
         }
@@ -60,7 +63,7 @@ export component SettingsSwitch inherits Rectangle {
         x: 0px; y: 0px; width: root.width; height: row.height;
         enabled: root.enabled;
         accessible-role: switch;
-        accessible-label: root.text;
+        accessible-label: root.label;
         accessible-description: root.description;
         accessible-checkable: true;
         accessible-checked: root.checked;
@@ -81,6 +84,7 @@ export component Choices inherits Rectangle {
     in property <[string]> options;
     in property <string> label;
     in-out property <int> current;
+    in property <bool> controlled;
     callback chosen(int);
     height: 36px; max-width: 360px;
     border-radius: 8px; background: Theme.sunken;
@@ -94,7 +98,7 @@ export component Choices inherits Rectangle {
             animate background { duration: Theme.quick; }
             accessible-role: button;
             accessible-label: index == root.current ? option + ", chosen" : option;
-            accessible-action-default => { root.current = index; root.chosen(index); }
+            accessible-action-default => { if !root.controlled { root.current = index; } root.chosen(index); }
             Text {
                 text: option; font-size: 14px;
                 color: index == root.current ? Theme.text : Theme.secondary;
@@ -102,7 +106,7 @@ export component Choices inherits Rectangle {
             }
             choice := TouchArea {
                 mouse-cursor: MouseCursor.pointer;
-                clicked => { root.current = index; root.chosen(index); }
+                clicked => { if !root.controlled { root.current = index; } root.chosen(index); }
             }
         }
     }
@@ -115,6 +119,9 @@ export component SettingsScreen inherits Rectangle {
     /// 3 notifications, 4 Discord, 5 sounds, 6 advanced, 7 appearance.
     in-out property <int> settings-section;
     in property <bool> discord-build;
+    in property <bool> with-plugins;
+    callback plugins-closed;
+    changed settings-section => { if self.settings-section != 11 { root.plugins-closed(); } }
     in property <bool> preview;
     callback close;
     callback refresh-devices;
@@ -164,6 +171,14 @@ export component SettingsScreen inherits Rectangle {
                             text: "Discord"; icon: @image-url("icons/discord.svg");
                             selected: root.settings-section == 4; clicked => { root.settings-section = 4; }
                         }
+                        if root.with-plugins: ChannelRow {
+                            text: "Plugins"; icon: @image-url("icons/plugins.svg");
+                            selected: root.settings-section == 11; clicked => { root.settings-section = 11; }
+                        }
+                        if root.with-plugins: ChannelRow {
+                            text: "Enhanced"; icon: @image-url("icons/enhanced.svg");
+                            selected: root.settings-section == 12; clicked => { root.settings-section = 12; }
+                        }
                         ChannelRow {
                             text: "Advanced"; icon: @image-url("icons/settings.svg");
                             selected: root.settings-section == 6; clicked => { root.settings-section = 6; }
@@ -173,11 +188,16 @@ export component SettingsScreen inherits Rectangle {
             }
             Rectangle {
                 horizontal-stretch: 2; min-width: 440px;
-                ScrollView {
-                    HorizontalLayout {
+                // Plugins owns its scrolling lists. Give it the viewport rather
+                // than measuring those lists as an ordinary settings form.
+                scroll := ScrollView {
+                    content-height: root.settings-section == 11 ? self.visible-height : page.preferred-height;
+                    page := HorizontalLayout {
+                        height: root.settings-section == 11 ? scroll.visible-height : self.preferred-height;
                         padding-left: 40px; padding-right: 96px; padding-top: 56px; padding-bottom: 56px;
                         VerticalLayout {
-                            max-width: 660px; horizontal-stretch: 1; spacing: 16px; alignment: start;
+                            max-width: 660px; horizontal-stretch: 1; spacing: 16px;
+                            alignment: root.settings-section == 11 ? LayoutAlignment.stretch : LayoutAlignment.start;
                             @children
                         }
                     }
@@ -936,4 +956,11 @@ export component DiscordSettings inherits VerticalLayout {
         checked: root.hide-blocked;
         toggled(hide) => { root.hide-blocked-toggled(hide); }
     }
+}
+
+// Keep plugin selections in sync when a binding is updated after a choice.
+export component Picker inherits ComboBox {
+    in property <int> chosen;
+    current-index: root.chosen;
+    changed chosen => { root.current-index = root.chosen; }
 }

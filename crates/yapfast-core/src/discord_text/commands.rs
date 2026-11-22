@@ -19,8 +19,29 @@ pub fn command(
     done: &UnboundedSender<Done>,
     events: &UnboundedSender<Event>,
 ) {
-    if matches!(command, Command::Open(_) | Command::CloseRoom) {
-        channels.close();
+    if let Command::Discord(DiscordCommand::ReleaseDmMemory(release)) = command {
+        channels.set_release_dms(release);
+        return;
+    }
+    if let Command::Discord(DiscordCommand::ReleaseServerMemory(release)) = command {
+        channels.set_release_servers(release);
+        return;
+    }
+    if matches!(
+        command,
+        Command::Discord(DiscordCommand::ReleaseUnusedPreviews)
+    ) {
+        channels
+            .previews
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear_unused();
+        return;
+    }
+    match &command {
+        Command::Open(room) => channels.close(Some(room)),
+        Command::CloseRoom => channels.close(None),
+        _ => {}
     }
     if let Command::Aside(room) = command {
         aside(room, discord, channels, done, events);
@@ -147,8 +168,14 @@ pub fn command(
         match OpenChannel::open(discord, &room, false, done, channels.previews.clone()) {
             // The member list follows as Live::Members.
             Some(mut channel) => {
+                if let Some(sends) = channels.dm_sends.remove(&room) {
+                    channel
+                        .sent
+                        .extend(sends.iter().map(|send| send.nonce.clone()));
+                    channel.pending = sends;
+                }
                 // Shown at once as it was kept on disk, while the latest page loads.
-                if channel.loaded {
+                if channel.loaded || !channel.pending.is_empty() {
                     publish(&mut channel, discord, done, events);
                 }
                 send_topic(&mut channel, discord, events, true);
@@ -379,6 +406,40 @@ pub fn finished(
     };
     // The channel on screen it's for: the open one or the thread beside it.
     let shown = channels.is_open(&room).then(|| room.clone());
+    // An unloaded DM has no history to update. Resolve only its outstanding sends.
+    if let Done::Sent { nonce, result, .. } = &finished
+        && let Some(pending) = channels.dm_sends.get_mut(&room)
+    {
+        match result {
+            Ok(message) => {
+                pending.retain(|send| send.nonce != *nonce);
+                // The send finished after the DM's timeline went away. Its
+                // newest cached page should still include the sent message.
+                if let Some((_, channel)) = discord::parse_room(&room)
+                    && channel == message.channel_id
+                {
+                    let mut saved = yapfast_discord::cache::messages(channel);
+                    saved.retain(|old| old.id != message.id);
+                    saved.push(message.clone());
+                    saved.sort_unstable_by_key(Message::order);
+                    yapfast_discord::cache::save_messages(channel, saved);
+                }
+            }
+            Err(error) => {
+                if let Some(send) = pending.iter_mut().find(|send| send.nonce == *nonce) {
+                    send.failed = true;
+                    let _ = events.send(Event::RoomError {
+                        room: room.clone(),
+                        message: error.clone(),
+                    });
+                }
+            }
+        }
+        if pending.is_empty() {
+            channels.dm_sends.remove(&room);
+        }
+        return;
+    }
     // Closed channels kept lately take what finished too.
     let channel = channels.get_mut(&room);
     let mut changed = false;
@@ -436,7 +497,10 @@ pub fn finished(
             };
             let history = match (result, channel) {
                 // Asked for before what shows was replaced; it's dropped.
-                (_, Some(channel)) if load != Load::Latest && generation != channel.generation => {
+                (_, Some(channel))
+                    if generation >> 32 != channel.generation >> 32
+                        || (load != Load::Latest && generation != channel.generation) =>
+                {
                     None
                 }
                 (Ok(page), Some(channel)) => {
@@ -556,6 +620,10 @@ pub fn live(
     done: &UnboundedSender<Done>,
     events: &UnboundedSender<Event>,
 ) {
+    // A plugin that subscribed hears of it here, where the gateway's own
+    // messages become this conversation's: one relaxed load while none did.
+    #[cfg(feature = "plugins")]
+    super::plugins_observed(&event, discord, channels, events);
     if let Ok(Live::FavoriteGifs(favorites)) = &event {
         let _ = events.send(Event::FavoriteGifs(Ok(gifs::favorites(favorites))));
         tokio::spawn(yapfast_discord::service::keep_favorite_gifs(

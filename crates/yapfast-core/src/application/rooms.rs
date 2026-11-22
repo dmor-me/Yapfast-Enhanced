@@ -556,6 +556,10 @@ impl Application {
     }
 
     pub(super) fn load_pictures(&mut self, urls: Vec<String>) -> Vec<Effect> {
+        // A marketplace row's icon is in the catalog's own bytes, not on a
+        // server: it is decoded here, and only the rows on screen ask for it.
+        #[cfg(feature = "plugins")]
+        let urls = self.plugin_icons(urls);
         let wanted: Vec<String> = urls
             .into_iter()
             .filter(|url| self.requested_pictures.insert(url.clone()))
@@ -599,7 +603,7 @@ impl Application {
             .flatten();
         // Messages after the last one read are new.
         let seen = room.last_read.clone();
-        self.remember_view();
+        self.remember_view(Some(&id));
         self.last_selected
             .insert(self.state.navigation.clone(), id.clone());
         self.state.dm_screen = None;
@@ -629,6 +633,13 @@ impl Application {
         self.state.notice = None;
         self.state.messages = Arc::new(vec![]);
         self.visible_messages.clear();
+        // The member list is another room's now: what a plugin badged its
+        // people with goes with it.
+        #[cfg(feature = "plugins")]
+        {
+            self.visible_members.clear();
+            self.badges_rooms = None;
+        }
         self.state.members = None;
         if !self.state.preview
             && let Some(index) = self.shown.iter().position(|shown| shown.room == id)
@@ -703,7 +714,7 @@ impl Application {
 
     fn close_room(&mut self) -> Vec<Effect> {
         let mut effects = self.close_threads();
-        self.remember_view();
+        self.remember_view(None);
         self.state.selected = None;
         self.state.confirm_delete = None;
         self.state.forwarding = None;
@@ -725,6 +736,11 @@ impl Application {
         self.state.notice = None;
         self.state.messages = Arc::new(vec![]);
         self.visible_messages.clear();
+        #[cfg(feature = "plugins")]
+        {
+            self.visible_members.clear();
+            self.badges_rooms = None;
+        }
         self.state.members = None;
         self.state.topic = None;
         self.state.selection_version = self.state.selection_version.wrapping_add(1);
@@ -742,14 +758,17 @@ impl Application {
             (self.discord_index.rooms(), self.discord_index.servers());
         #[cfg(not(feature = "discord"))]
         let (discord_rooms, discord_servers) = (std::iter::empty(), std::iter::empty());
-        chat::sync_list(
+        let rooms_changed = chat::sync_list(
             &mut self.state.rooms,
             self.matrix_rooms.iter().chain(discord_rooms),
         );
-        chat::sync_list(
+        let servers_changed = chat::sync_list(
             &mut self.state.servers,
             self.matrix_servers.iter().chain(discord_servers),
         );
+        if rooms_changed || servers_changed {
+            self.state.list_changes = self.state.list_changes.wrapping_add(1);
+        }
         if let Navigation::Server(id) = &self.state.navigation
             && !self.state.servers.iter().any(|server| &server.id == id)
         {

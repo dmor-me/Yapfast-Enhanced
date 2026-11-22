@@ -1,3 +1,63 @@
+# Yapfast Enhanced v0.1.0.0
+
+Native plugin support for **official Yapfast 0.1.0 on Windows x64**.
+This compatibility build keeps that Yapfast version's interface and capabilities.
+
+- [Download Enhanced 0.1.0.0](https://github.com/dmor-me/Yapfast-Enhanced/releases/tag/v0.1.0.0) — version-specific offline installer and checksums.
+- [Latest supported Enhanced source](https://github.com/dmor-me/Yapfast-Enhanced/tree/main)
+- [Compatibility and tested limitations](docs/compatibility-0.1.0.md)
+- [Installation and recovery](docs/enhanced-inplace.md)
+- [Plugin development](docs/plugins/README.md)
+- [Attribution and full source](NOTICE.md)
+
+## Screenshots and quick tour
+
+Captured from **Enhanced 0.1.0.0** using a separate local demo profile.
+No real account or conversations are shown.
+
+### Enhanced settings and memory tools
+
+Open **Settings → Enhanced** to check your version, check GitHub for updates,
+and adjust the optional memory tools. DM and server-history release are off
+by default; enable them to release history from RAM when switching away while
+keeping the disk cache. The preview budget controls native plugin media previews.
+
+![Enhanced 0.1.0.0 settings showing release checks, optional history release and media cache controls](docs/images/enhanced/enhanced-settings.png)
+
+<details>
+<summary>See performance information and plugin troubleshooting</summary>
+
+Open **Performance information** to view application and plugin-helper RAM/CPU
+readings. These are live process readings, not per-plugin measurements or
+promised memory usage. This demo has no plugins running.
+Use **Restart with plugins paused** when troubleshooting; plugin settings are kept.
+
+![Enhanced 0.1.0.0 performance panel showing process resource readings and restart with plugins paused](docs/images/enhanced/performance-information.png)
+
+</details>
+
+To install a plugin, open **Settings → Plugins**, choose **Marketplace** or
+**Add from URL**, review its permissions and install it. Manage enabled plugins
+under **Installed**. For local packages, use **Advanced → Install from file**.
+See the [plugin guide](docs/plugins/README.md) for supported APIs and examples.
+
+## Installation
+
+1. Install the exact supported official Yapfast version above, or use its portable copy.
+2. Download `Yapfast-Enhanced-Installer.exe` from this branch's matching release.
+3. Finish calls/uploads, then select the existing folder containing `yapfast.exe`.
+   Setup closes only that installation and preserves account and plugin data.
+4. Open **Settings → Plugins**. Enhanced tools and release checks are under **Enhanced**.
+
+Downloads become available when the matching release is published. These unsigned
+builds check the exact supported binary fingerprint. Other Yapfast versions are
+refused; there is no automatic upgrade or downgrade. See the compatibility notes
+for older-host API limitations and local validation. The preserved upstream README
+below describes plain Yapfast and is reference material, not Enhanced instructions.
+
+<details>
+<summary>Original Yapfast 0.1.0 README (upstream reference)</summary>
+
 <p align="center">
   <img src="packaging/icon.svg" width="96" height="96" alt="">
 </p>
@@ -181,3 +241,5 @@ It stands on [Slint](https://slint.dev), [Skia](https://skia.org),
 
 <sub>Yapfast isn't affiliated with or endorsed by Discord Inc. Discord is a
 trademark of Discord Inc.</sub>
+
+</details>

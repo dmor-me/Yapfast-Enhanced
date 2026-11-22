@@ -44,6 +44,7 @@ impl Application {
             },
         ];
         self.state.navigation = Navigation::Server("friends".into());
+        self.state.list_changes = self.state.list_changes.wrapping_add(1);
         self.state.rooms = vec![
             preview_room("general", "general", false, 4),
             preview_room("games", "games", false, 4),
@@ -218,6 +219,7 @@ pub(super) fn preview_members(room: &str) -> Vec<ChatMember> {
     let mut members: Vec<_> = people
         .iter()
         .map(|&(name, role)| ChatMember {
+            bot: false,
             id: format!("@{}:preview.local", name.to_lowercase()),
             name: name.into(),
             username: None,

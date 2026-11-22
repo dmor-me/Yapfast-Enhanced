@@ -20,8 +20,8 @@ use yapfast_core::{
     },
     backend::Backend,
     chat::{
-        ChannelKind, ChannelSettings, ChatMessage, Command, Delivery, EmbedField, Event, Picture,
-        Placement, Presence, ProfilePicture, ProfileRole, Role, VideoCommand,
+        ChannelKind, ChannelSettings, ChatMessage, Command, Delivery, DiscordCommand, EmbedField,
+        Event, Picture, Placement, Presence, ProfilePicture, ProfileRole, Role, VideoCommand,
     },
     discord, links, mention,
     meter::{self, InputMeter},
@@ -41,12 +41,22 @@ mod browser;
 mod call_link;
 mod call_timer;
 mod callbacks;
+#[cfg(feature = "plugins")]
+mod enhanced_tools;
+#[cfg(feature = "plugins")]
+mod enhanced_updates;
 mod gifs;
 mod menus;
 mod messages;
 #[cfg(windows)]
 mod move_loop;
 mod pictures;
+#[cfg(feature = "plugins")]
+mod plugin_media;
+#[cfg(feature = "plugins")]
+mod plugin_settings;
+#[cfg(feature = "plugins")]
+mod plugins;
 mod profile;
 mod refresh;
 mod shell;
@@ -69,6 +79,8 @@ pub enum Exit {
     UseSoftware(String),
     /// The renderer setting changed; restart to use it.
     Restart,
+    #[cfg(feature = "plugins")]
+    Plugins(bool),
 }
 
 /// Slint releases the first window after at most 500 ms of desktop appearance
@@ -129,11 +141,13 @@ pub fn run(
     if !hidden && let Err(error) = window.show() {
         return failed(error, "could not show Yapfast");
     }
-    if !preview {
+    if !preview && !isolated_display() {
         AUTOSTART.set(autostart::SUPPORTED);
         autostart::refresh();
     }
     prepare(&window);
+    #[cfg(windows)]
+    crate::installer_shutdown::listen();
     let adapter = Adapter::new(Arc::new(runtime), root, &window)?;
     bind_callbacks(&window, &adapter);
     watch_window(&window, &adapter);
@@ -194,13 +208,17 @@ pub fn run(
             "the window did not appear".into(),
             "Yapfast's window did not appear",
         ),
+        #[cfg(feature = "plugins")]
+        Ok(()) if adapter.plugin_restart.is_some() => {
+            Ok(Exit::Plugins(adapter.plugin_restart.unwrap()))
+        }
         Ok(()) if restart => Ok(Exit::Restart),
         Ok(()) => Ok(Exit::Closed),
     }
 }
 
 /// Only the private test compositor can request a different initial size.
-fn isolated_display() -> bool {
+pub(crate) fn isolated_display() -> bool {
     std::env::var("YAPFAST_FRAMEWORK_ISOLATED_DISPLAY").as_deref() == Ok("1")
 }
 
@@ -239,7 +257,13 @@ const ZOOM_NOTE: Duration = Duration::from_millis(1200);
 /// with Ctrl and +, - and 0 or the scroll wheel, keeping the level in the
 /// layout, and takes files dropped on it.
 fn watch_window(window: &YapfastWindow, adapter: &Rc<RefCell<Adapter>>) {
+    #[cfg(feature = "plugins")]
+    use slint::winit_030::winit::{
+        event::ElementState,
+        keyboard::{Key, NamedKey},
+    };
     use slint::winit_030::{EventResult, winit::event::WindowEvent};
+
     let saved = zoom::saved(adapter.borrow().layout.zoom);
     let adapter = Rc::downgrade(adapter);
     let (to, weak) = (adapter.clone(), window.as_weak());
@@ -332,7 +356,19 @@ fn watch_window(window: &YapfastWindow, adapter: &Rc<RefCell<Adapter>>) {
                     adapter.used(&window);
                 }
                 if let WindowEvent::Focused(focused) = event {
+                    #[cfg(feature = "plugins")]
+                    if let (Some(adapter), Some(window)) = (adapter.upgrade(), weak.upgrade()) {
+                        let focused = *focused;
+                        slint::Timer::single_shot(Duration::ZERO, move || {
+                            adapter
+                                .borrow_mut()
+                                .action(&window, Action::WindowFocused(focused));
+                        });
+                    }
                     FOCUSED.set(*focused);
+                    if let Some(window) = weak.upgrade() {
+                        window.set_window_focused(*focused);
+                    }
                     if let Some(window) = weak.upgrade() {
                         show_motion(&window);
                         if *focused {
@@ -356,6 +392,25 @@ fn watch_window(window: &YapfastWindow, adapter: &Rc<RefCell<Adapter>>) {
                             zoom::apply(window.window(), base.get(), level.get());
                         }
                     });
+                }
+                // The native plugin gallery closes even when a text field owns focus.
+                #[cfg(feature = "plugins")]
+                if let WindowEvent::KeyboardInput { event: key, .. } = event
+                    && key.state == ElementState::Pressed
+                    && key.logical_key == Key::Named(NamedKey::Escape)
+                    && let Some(window) = weak.upgrade()
+                    && let Some(part) = window
+                        .get_plugin_dialogs()
+                        .iter()
+                        .find(|part| part.browser.available)
+                {
+                    let weak = weak.clone();
+                    slint::Timer::single_shot(Duration::ZERO, move || {
+                        if let Some(window) = weak.upgrade() {
+                            window.invoke_plugin_dismissed(part.plugin, part.slot);
+                        }
+                    });
+                    return EventResult::PreventDefault;
                 }
                 let step = match keys.event(event) {
                     zoom::Outcome::Pass => return EventResult::Propagate,
@@ -530,10 +585,14 @@ fn test_control() -> Option<PathBuf> {
 /// Run each new line of the command file.
 fn control(path: PathBuf, shell: Rc<shell::Shell>) -> slint::Timer {
     let handled = Cell::new(0);
+    let benchmark = std::env::var("YAPFAST_UI_TEST_DM_BENCHMARK").as_deref() == Ok("1")
+        && std::env::var("YAPFAST_DISCORD_TEST_SERVER")
+            .is_ok_and(|server| server.starts_with("http://127.0.0.1:"));
+    let opening_dm = RefCell::new(None::<(String, std::time::Instant)>);
     let timer = slint::Timer::default();
     timer.start(
         slint::TimerMode::Repeated,
-        Duration::from_millis(500),
+        Duration::from_millis(if benchmark { 10 } else { 500 }),
         move || {
             let Ok(text) = std::fs::read_to_string(&path) else {
                 return;
@@ -584,6 +643,71 @@ fn control(path: PathBuf, shell: Rc<shell::Shell>) -> slint::Timer {
                         }
                     }
                     "quit" => slint::quit_event_loop().map_err(|error| error.to_string().into()),
+                    #[cfg(feature = "plugins")]
+                    command if command.starts_with("enhanced ") => {
+                        if let Some(window) = window {
+                            let shown = window.global::<EnhancedUpdates>();
+                            match &command["enhanced ".len()..] {
+                                "open" => { window.set_settings_section(12); window.set_settings_open(true); }
+                                "dm-on" => window.invoke_release_dm_memory_toggled(true),
+                                "server-on" => shown.invoke_server_memory_toggled(true),
+                                "budget-128" => shown.invoke_cache_chosen(3),
+                                "release" => shown.invoke_release_previews(),
+                                "scan" => shown.invoke_scan_cache(),
+                                "clean" => shown.invoke_clean_cache(),
+                                "monitor" => shown.set_monitor_open(true),
+                                "snapshot" => {
+                                    if let Ok(pixels) = window.window().take_snapshot() {
+                                        if let Err(error) = image::save_buffer_with_format(
+                                            path.with_extension("png"), pixels.as_bytes(),
+                                            pixels.width(), pixels.height(), image::ColorType::Rgba8,
+                                            image::ImageFormat::Png,
+                                        ) {
+                                            tracing::warn!(%error, "could not save isolated Enhanced preview");
+                                        }
+                                    }
+                                }
+                                "check" => shown.invoke_enhanced_check_now(),
+                                "auto-on" => shown.invoke_check_toggled(true),
+                                "auto-off" => shown.invoke_check_toggled(false),
+                                "pause" | "resume" => {
+                                    let _ = std::fs::write(&path, "enhanced state\n");
+                                    shown.invoke_plugin_restart(command.ends_with("pause"));
+                                    window.invoke_restart();
+                                }
+                                "state" => {
+                                    let a = adapter.borrow();
+                                    tracing::info!(
+                                        paused = shown.get_plugins_paused(),
+                                        dm = a.layout.release_dm_memory,
+                                        servers = a.layout.release_server_memory,
+                                        budget = a.layout.media_cache_mib.unwrap_or(64),
+                                        checks = a.layout.enhanced_check_updates,
+                                        check_timer = a.enhanced.timer_running(),
+                                        memory = %shown.get_process_memory(),
+                                        cpu = %shown.get_process_cpu(),
+                                        tool = %shown.get_tool_message(),
+                                        check = %shown.get_enhanced_message(),
+                                        "enhanced test state"
+                                    );
+                                }
+                                _ => {}
+                            }
+                        }
+                        Ok(())
+                    }
+                    name if benchmark && name.starts_with("dm ") => {
+                        let id = &name["dm ".len()..];
+                        if !id.is_empty()
+                            && id.bytes().all(|byte| byte.is_ascii_digit())
+                            && let Some(window) = window
+                        {
+                            let room = format!("discord:@me:{id}");
+                            opening_dm.replace(Some((room.clone(), std::time::Instant::now())));
+                            adapter.borrow_mut().action(&window, Action::SelectRoom(room));
+                        }
+                        Ok(())
+                    }
                     // `pick avatar PATH` or `pick banner PATH` chooses a
                     // picture in the server profile editor.
                     command if command.starts_with("pick ") => {
@@ -619,6 +743,17 @@ fn control(path: PathBuf, shell: Rc<shell::Shell>) -> slint::Timer {
                 if let Err(error) = result {
                     tracing::error!(command, %error, "test window control failed");
                 }
+            }
+            let ready = opening_dm.borrow().as_ref().and_then(|(room, started)| {
+                let adapter = shell.adapter.borrow();
+                let state = &adapter.app.state;
+                let rows = shell.window()?.get_messages().row_count();
+                (state.selected.as_ref() == Some(room) && state.room_ready && rows > 0)
+                    .then(|| (room.clone(), started.elapsed(), rows))
+            });
+            if let Some((room, elapsed, rows)) = ready {
+                opening_dm.replace(None);
+                tracing::info!(%room, elapsed_us = elapsed.as_micros() as u64, rows, "test DM ready");
             }
         },
     );
@@ -752,6 +887,10 @@ struct Layout {
     custom_themes: Vec<theme::Custom>,
     /// Closing the window leaves Yapfast in the system tray; on unless turned off.
     close_to_tray: Option<bool>,
+    release_dm_memory: bool,
+    release_server_memory: bool,
+    enhanced_check_updates: bool,
+    media_cache_mib: Option<u32>,
 }
 
 /// Yapfast's sounds start as they're made: 12 dB under full scale at the loudest.
@@ -914,6 +1053,7 @@ impl Layout {
         window.set_adjust_each_sound(self.adjust_each_sound);
         window.set_gpu_rendering(self.gpu_rendering);
         window.set_close_to_tray(self.close_to_tray.unwrap_or(true));
+        window.set_release_dm_memory(self.release_dm_memory);
         let each: Vec<i32> = Sound::ALL
             .iter()
             .map(|sound| self.each_sound.get(sound).copied().unwrap_or(100).into())
@@ -1116,7 +1256,22 @@ struct Adapter {
     runtime: Arc<BackgroundRuntime>,
     root: PathBuf,
     layout: Layout,
+    #[cfg(feature = "plugins")]
+    enhanced: enhanced_updates::State,
+    #[cfg(feature = "plugins")]
+    plugin_restart: Option<bool>,
+    #[cfg(feature = "plugins")]
+    media: plugin_media::State,
     app: Application,
+    /// What the person did with what a plugin drew, as the window dispatched
+    /// it, for the tests that check a click produces one. Delivering it is the
+    /// application's, which owns the bridge, so this is the shell's half only.
+    #[cfg(all(test, feature = "plugins"))]
+    plugin_inputs: std::cell::RefCell<Vec<yapfast_core::plugins::Input>>,
+    /// What a page's request set off, to run once the page has let go of its
+    /// own borrow: see `defer`.
+    #[cfg(feature = "plugins")]
+    deferred: Vec<Effect>,
     models: Models,
     icons: Icons,
     weak: std::rc::Weak<RefCell<Self>>,
@@ -1230,6 +1385,9 @@ struct Adapter {
     link_code: Option<(String, slint::Image)>,
     /// What the GIF picker's grid shows.
     gifs: gifs::Shown,
+    /// The enabled plugins; `None` without any.
+    #[cfg(feature = "plugins")]
+    plugins: Option<Box<plugins::Plugins>>,
 }
 
 impl Adapter {
@@ -1294,15 +1452,28 @@ impl Adapter {
         };
         let models = Models::default();
         models.attach(window);
+        // Before the theme applies, so plugins' colours show in the first frame.
+        #[cfg(feature = "plugins")]
+        let plugins = plugins::Plugins::load();
+        #[cfg(feature = "plugins")]
+        plugins::show(window, plugins.as_deref());
         let layout = Layout::read(&root);
         layout.apply(window);
         let mut app = Application::default();
+        #[cfg(feature = "plugins")]
+        let mut plugins = plugins;
+        #[cfg(feature = "plugins")]
+        if let Some(plugins) = &mut plugins {
+            plugins.enable(&mut app);
+        }
         app.remember_reaction_uses(layout.reactions.clone());
         app.dispatch(Action::ShowHiddenChannels(layout.show_hidden_channels));
         app.dispatch(Action::ShowProfilePanel(!layout.profile_panel_hidden));
         app.dispatch(Action::SyncDiscordReads(
             layout.sync_discord_reads.unwrap_or(true),
         ));
+        app.dispatch(Action::ReleaseDmMemory(layout.release_dm_memory));
+        app.dispatch(Action::ReleaseServerMemory(layout.release_server_memory));
         app.dispatch(Action::ReplyPing(layout.reply_ping.unwrap_or(true)));
         app.dispatch(Action::HideBlocked(layout.hide_blocked));
         app.dispatch(Action::StripTracking(layout.strip_tracking.unwrap_or(true)));
@@ -1314,7 +1485,17 @@ impl Adapter {
                 runtime,
                 root,
                 layout,
+                #[cfg(feature = "plugins")]
+                enhanced: enhanced_updates::State::default(),
+                #[cfg(feature = "plugins")]
+                plugin_restart: None,
+                #[cfg(feature = "plugins")]
+                media: Default::default(),
                 app,
+                #[cfg(all(test, feature = "plugins"))]
+                plugin_inputs: std::cell::RefCell::new(Vec::new()),
+                #[cfg(feature = "plugins")]
+                deferred: Vec::new(),
                 models,
                 icons,
                 weak: weak.clone(),
@@ -1373,6 +1554,8 @@ impl Adapter {
                 #[cfg(feature = "discord")]
                 link_code: None,
                 gifs: gifs::Shown::default(),
+                #[cfg(feature = "plugins")]
+                plugins,
             })
         }))
     }
@@ -1380,6 +1563,13 @@ impl Adapter {
     /// Present the existing models and state in a new window.
     fn attach(&mut self, window: &YapfastWindow) {
         self.models.attach(window);
+        #[cfg(feature = "plugins")]
+        {
+            if let Some(plugins) = &mut self.plugins {
+                plugins.invalidate_window();
+            }
+            plugins::show(window, self.plugins.as_deref());
+        }
         self.layout.apply(window);
         // The theme being edited goes unsaved with the old window, and rows
         // may carry its mention colour; the refresh after attaching builds
@@ -1490,6 +1680,14 @@ impl Adapter {
         }
     }
 
+    /// Runs `effects` after the current call returns, for a cause that is
+    /// itself borrowed while it works: the Plugins page asks for something
+    /// while holding the page, and the answer may want to redraw it.
+    #[cfg(feature = "plugins")]
+    fn defer(&mut self, effects: Vec<Effect>) {
+        self.deferred.extend(effects);
+    }
+
     fn stop_backend(&mut self) {
         if let Some(events) = self.events.take() {
             events.abort();
@@ -1505,7 +1703,30 @@ impl Adapter {
                     self.app.remember_channels(self.layout.channels.clone());
                     let (backend, mut events) =
                         Backend::start(self.runtime.clone(), self.root.clone(), start);
+                    #[cfg(feature = "plugins")]
+                    let plugin_events = backend.events();
+                    if self.layout.release_server_memory {
+                        let _ = backend
+                            .send(Command::Discord(DiscordCommand::ReleaseServerMemory(true)));
+                    }
+                    if self.layout.release_dm_memory {
+                        let _ =
+                            backend.send(Command::Discord(DiscordCommand::ReleaseDmMemory(true)));
+                    }
                     self.backend = Some(backend);
+                    // The plugin system's notices go into this session's own
+                    // event stream, by the same path as everything else.
+                    #[cfg(feature = "plugins")]
+                    {
+                        let opened = self.app.open_plugins(
+                            &self.root,
+                            env!("CARGO_PKG_VERSION"),
+                            plugin_events,
+                        );
+                        if !opened.is_empty() {
+                            self.execute(opened);
+                        }
+                    }
                     let weak = self.weak.clone();
                     // Network work stays on Tokio. Only channel delivery runs on
                     // Slint's executor, which wakes on an event and never polls idle.
@@ -1553,6 +1774,51 @@ impl Adapter {
                         }
                     }
                 }
+                #[cfg(feature = "plugins")]
+                // A plugin asking to reach a site: the dialog belongs to the
+                // window, not to Settings, so it shows wherever the person is.
+                #[cfg(feature = "plugins")]
+                Effect::Plugin(yapfast_core::application::plugins::Effect::FileDialog {
+                    plugin,
+                    call,
+                    save,
+                }) => self.plugin_file_dialog(plugin, call, save),
+                #[cfg(feature = "plugins")]
+                Effect::Plugin(yapfast_core::application::plugins::Effect::Consent(ask)) => {
+                    self.plugin_consent(ask)
+                }
+                // What a plugin drew, or what was taken away: the slots that
+                // moved are shown again, and no others.
+                #[cfg(feature = "plugins")]
+                Effect::Plugin(yapfast_core::application::plugins::Effect::Slots) => {
+                    if let Some(window) = self.window.upgrade() {
+                        self.show_plugin_slots(&window);
+                    }
+                }
+                // How the person on the profile card looks changed, so the card
+                // is drawn again; nothing else on screen moved.
+                #[cfg(feature = "plugins")]
+                Effect::Plugin(yapfast_core::application::plugins::Effect::Identity) => {
+                    if let Some(window) = self.window.upgrade() {
+                        self.show_profile_card(&window);
+                    }
+                }
+                // The Plugins page holds a copy of the runtime's view: hand it a
+                // fresh one, which redraws the page if it's open. A closed page
+                // drops the view unread, so none is built for it: the registry's
+                // rows, the open plugin's form and its log ring stay where they
+                // are, and opening the page reads them again.
+                #[cfg(feature = "plugins")]
+                Effect::Plugin(_) => {
+                    if !plugin_settings::is_open() {
+                        continue;
+                    }
+                    let window = self.window.upgrade();
+                    let view = self.app.plugins_page();
+                    if let Some(window) = window {
+                        plugin_settings::set_view(&window, view);
+                    }
+                }
                 Effect::PreviewCamera(filming) => {
                     self.preview_camera = None;
                     if let Some((camera, feed)) = filming {
@@ -1592,6 +1858,8 @@ impl Adapter {
                 }
                 Effect::OpenPage(page) => browser::open(&page),
                 Effect::CopyPicture(picture) => crate::copy::picture(picture),
+                #[cfg(feature = "plugins")]
+                Effect::CopyText(text) => crate::copy::text(text),
                 Effect::StopDiscordLink => {
                     #[cfg(feature = "discord")]
                     {
@@ -1720,6 +1988,10 @@ impl Adapter {
     }
 
     fn action(&mut self, window: &YapfastWindow, action: Action) {
+        #[cfg(all(test, feature = "plugins"))]
+        if let Action::PluginInput(input) = &action {
+            self.plugin_inputs.borrow_mut().push(input.clone());
+        }
         // A keystroke in the composer changes only the composer, and one in
         // the server profile editor only the editor; the rest of the window
         // stays as it is.
@@ -1751,6 +2023,15 @@ impl Adapter {
             Reach::EVERYTHING
         };
         self.execute(effects);
+        // What a page's request set off, which waited for the page to let go of
+        // its own borrow.
+        #[cfg(feature = "plugins")]
+        {
+            let deferred = std::mem::take(&mut self.deferred);
+            if !deferred.is_empty() {
+                self.execute(deferred);
+            }
+        }
         reach
     }
 }

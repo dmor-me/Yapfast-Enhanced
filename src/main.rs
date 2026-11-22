@@ -6,6 +6,11 @@
 
 #[cfg(feature = "desktop")]
 mod autostart;
+#[allow(
+    dead_code,
+    reason = "shared build metadata also supports the newer upstream About UI"
+)]
+mod build_info;
 #[cfg(feature = "desktop")]
 mod copy;
 #[cfg(feature = "desktop")]
@@ -20,6 +25,8 @@ mod emoji_font;
 mod graphics;
 #[cfg(feature = "desktop")]
 mod icon;
+#[cfg(all(windows, feature = "desktop"))]
+mod installer_shutdown;
 #[cfg(feature = "desktop")]
 mod notify;
 #[cfg(feature = "desktop")]
@@ -28,6 +35,8 @@ mod paste;
 mod tray;
 #[cfg(feature = "desktop")]
 mod ui;
+#[cfg(feature = "desktop")]
+mod update;
 #[cfg(feature = "desktop")]
 mod zoom;
 
@@ -62,6 +71,21 @@ fn main() -> Result<()> {
     let mut arguments: Vec<_> = std::env::args().skip(1).collect();
     let renderer = renderer_argument(&mut arguments)?;
     let background = flag_argument(&mut arguments, "--background");
+    // Read before anything else is opened: a start that asked for no plugins
+    // must not read the plugin store or spawn a helper, and the flag has to be
+    // gone before the link arguments are parsed. Safe mode also keeps any
+    // plugin from changing the interface. A build without plugins takes the
+    // flag too, and starts without any as it always does.
+    if arguments.as_slice() == ["--version"] {
+        #[cfg(all(windows, feature = "desktop"))]
+        let _ = has_console();
+        println!("{}", build_info::current().summary());
+        return Ok(());
+    }
+    #[cfg(feature = "plugins")]
+    yapfast_core::cli::parse_no_plugins(&mut arguments);
+    #[cfg(not(feature = "plugins"))]
+    let _ = flag_argument(&mut arguments, NO_PLUGINS);
     #[cfg(all(windows, feature = "desktop"))]
     match data_directory(&arguments) {
         Some(directory) if !has_console() => logging::init_to_file(&directory.join("yapfast.log")),
@@ -107,6 +131,11 @@ fn main() -> Result<()> {
         [preview, argument, path] if preview == "--preview" && argument == "--data-dir" => {
             launch(runtime, path.into(), true, renderer, background, &arguments)
         }
+        #[cfg(feature = "desktop")]
+        [argument] if argument == "--enhanced-version" => {
+            println!("Enhanced {}", update::enhanced_releases::VERSION);
+            Ok(())
+        }
         [argument] if argument == "--smoke-test" => {
             runtime.block_on(runtime.spawn(yapfast_core::check_build()))?;
             println!(
@@ -138,7 +167,7 @@ fn main() -> Result<()> {
         }
         [argument] if argument == "--help" || argument == "-h" => {
             println!(
-                "Usage: yapfast [--preview] [--data-dir PATH] [--renderer gpu|software] [--background]\n       yapfast [--smoke-test | --help]\n       yapfast --call-experiment [--resume PATH]\n       yapfast [--voice-demo | --audio-devices]\n       yapfast session login --homeserver URL --user USER --password-stdin [--data-dir PATH]\n       yapfast session status [--data-dir PATH]\n       yapfast session recover --key-stdin [--data-dir PATH]\n       yapfast session logout [--data-dir PATH]\n\nWithout arguments, opens native Slint chat and restores a saved session.\n--renderer selects Skia Software or Skia GPU for this start, over the setting.\nIf Skia GPU fails to start, Yapfast restarts with Skia Software.\n--background starts in the system tray with a saved session, as starting at sign-in does.\n--preview opens local sample conversations without connecting to Matrix.\n--smoke-test checks the linked stack without signing in or opening audio devices.\n--call-experiment creates disposable local accounts and checks encrypted synthetic audio. Start scripts/test-stack up first.\n--voice-demo creates two local accounts and a server with encrypted text and voice channels.\n--audio-devices lists native audio devices and cameras without recording.\nSession commands support password sign-in. Secrets are read from stdin."
+                "Usage: yapfast [--preview] [--data-dir PATH] [--renderer gpu|software] [--background] [--no-plugins]\n       yapfast [--smoke-test | --version | --enhanced-version | --help]\n       yapfast --call-experiment [--resume PATH]\n       yapfast [--voice-demo | --audio-devices]\n       yapfast session login --homeserver URL --user USER --password-stdin [--data-dir PATH]\n       yapfast session status [--data-dir PATH]\n       yapfast session recover --key-stdin [--data-dir PATH]\n       yapfast session logout [--data-dir PATH]\n\nWithout arguments, opens native Slint chat and restores a saved session.\n--renderer selects Skia Software or Skia GPU for this start, over the setting.\nIf Skia GPU fails to start, Yapfast restarts with Skia Software.\n--background starts in the system tray with a saved session, as starting at sign-in does.\n--no-plugins temporarily pauses plugins.\n--version prints release metadata.\n--preview opens local sample conversations without connecting to Matrix.\n--smoke-test checks the linked stack without signing in or opening audio devices.\n--call-experiment creates disposable local accounts and checks encrypted synthetic audio. Start scripts/test-stack up first.\n--voice-demo creates two local accounts and a server with encrypted text and voice channels.\n--audio-devices lists native audio devices and cameras without recording.\nSession commands support password sign-in. Secrets are read from stdin."
             );
             Ok(())
         }
@@ -197,8 +226,10 @@ fn launch(
     yapfast_core::keep_discord_files(&root);
     match ui::run(runtime, root, preview, renderer, fallback, background)? {
         ui::Exit::Closed => Ok(()),
-        ui::Exit::UseSoftware(reason) => relaunch(arguments, Some(&reason)),
-        ui::Exit::Restart => relaunch(arguments, None),
+        ui::Exit::UseSoftware(reason) => relaunch(arguments, Some(&reason), None),
+        ui::Exit::Restart => relaunch(arguments, None, None),
+        #[cfg(feature = "plugins")]
+        ui::Exit::Plugins(paused) => relaunch(arguments, None, Some(paused)),
     }
 }
 
@@ -207,11 +238,21 @@ fn launch(
 /// released its session and runtime. `arguments` no longer hold `--renderer`,
 /// so a restart follows the setting, nor `--background`: the window shows.
 #[cfg(feature = "desktop")]
-fn relaunch(arguments: &[String], gpu_failure: Option<&str>) -> Result<()> {
+fn relaunch(
+    arguments: &[String],
+    gpu_failure: Option<&str>,
+    plugin_mode: Option<bool>,
+) -> Result<()> {
     let mut command = std::process::Command::new(
         std::env::current_exe().context("could not find Yapfast to restart it")?,
     );
     command.args(arguments);
+    #[cfg(feature = "plugins")]
+    if plugin_mode.unwrap_or_else(yapfast_core::plugins::safe_mode) {
+        command.arg(NO_PLUGINS);
+    }
+    #[cfg(not(feature = "plugins"))]
+    let _ = plugin_mode;
     match gpu_failure {
         Some(reason) => command
             .args(["--renderer", "software"])
@@ -251,6 +292,8 @@ fn flag_argument(arguments: &mut Vec<String>, flag: &str) -> bool {
     arguments.len() != before
 }
 
+/// Starts in safe mode, without plugins.
+const NO_PLUGINS: &str = "--no-plugins";
 /// The renderer `--renderer` asks for; without it, the setting decides.
 fn renderer_argument(arguments: &mut Vec<String>) -> Result<Option<&'static str>> {
     let Some(index) = arguments

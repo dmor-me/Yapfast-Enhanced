@@ -2,6 +2,7 @@ import { ScrollView, ListView } from "scrollview.slint";
 import { Theme, Middle, Label } from "theme.slint";
 import { ActionButton, IconButton, Avatar, StatusText } from "controls.slint";
 import { StatusDot } from "rail.slint";
+import { PluginBadge, PluginBadgeView, PluginPart, PluginWidgets } from "plugins.slint";
 
 /// A member of the open room. A heading starts each role's group.
 export struct MemberRow {
@@ -17,6 +18,7 @@ export struct MemberRow {
     picture-url: string,
     /// Timed out in their Discord server, marked with a clock by the name.
     timed-out: bool,
+    plugin: [PluginBadge],
 }
 
 // The open room's members, grouped by role under the conversation header.
@@ -30,15 +32,34 @@ export component MemberPanel inherits Rectangle {
     callback open-profile(string, length);
     /// A member was right-clicked: their id, and where in the window.
     callback open-member-menu(string, length, length);
+    /// The rows in or near the list's view, as first and last index, so a
+    /// plugin is asked about the people on screen and no others.
+    callback viewport(int, int);
+    property <int> top-index: -1;
+    property <int> bottom-index: -1;
+    /// Changes as rows are made, which makes each of them report where it is.
+    property <int> view-tick: 0;
+    changed top-index => { root.viewport(root.top-index, root.bottom-index); }
+    changed bottom-index => { root.viewport(root.top-index, root.bottom-index); }
     background: Theme.sidebar;
     accessible-role: list;
     accessible-label: "Members";
     VerticalLayout {
         if root.note != "": HorizontalLayout { padding: 16px; Label { text: root.note; } }
         // A list view makes only the rows in sight, which matters in large servers.
-        ListView {
+        member-list := ListView {
             vertical-stretch: 1;
             for member[index] in root.rows: VerticalLayout {
+                property <length> view-y: self.y + member-list.content-y;
+                property <int> view-tick: root.view-tick;
+                function report-view() {
+                    if self.view-y <= 0px && self.view-y + self.height > 0px { root.top-index = index; }
+                    if self.view-y < member-list.height && (self.view-y + self.height >= member-list.height || index == root.rows.length - 1) { root.bottom-index = index; }
+                }
+                init => { root.view-tick += 1; }
+                changed view-y => { self.report-view(); }
+                changed height => { self.report-view(); }
+                changed view-tick => { self.report-view(); }
                 padding-left: 8px; padding-right: 8px;
                 padding-top: index == 0 ? 8px : 0px;
                 padding-bottom: index == root.rows.length - 1 ? 12px : 2px;
@@ -79,6 +100,11 @@ export component MemberPanel inherits Rectangle {
                             Text {
                                 text: member.name; color: member.has-color ? member.color : Theme.secondary; font-size: 16px; font-weight: 500; overflow: elide;
                                 opacity: member.presence == "offline" ? 0.5 : 1;
+                            }
+                            // What plugins badge them with, each saying whose it is
+                            // to a screen reader.
+                            for badge in member.plugin: Middle {
+                                PluginBadgeView { badge: badge; opacity: member.presence == "offline" ? 0.5 : 1; }
                             }
                             if member.timed-out: Image {
                                 source: @image-url("icons/clock.svg"); width: 14px; image-fit: contain;
@@ -282,6 +308,12 @@ export component ProfileCard inherits Rectangle {
     /// A mutual server or friend was clicked, with where its row is in the window.
     callback open-server(ProfileServerRow, length, length, length, length);
     callback open-friend(string, length, length, length, length);
+    /// What plugins add to the open person's card, from the `profile.badges`
+    /// slot, drawn under the person's own details and above the card's notes.
+    in property <[PluginPart]> plugin-parts;
+    /// A widget of one of them: the plugin, its slot, the cell's id, its value,
+    /// and the person the card is of.
+    callback plugin-acted(string, string, string, string, string);
     property <length> banner-height: root.large ? 210px : root.docked ? 120px : 105px;
     property <length> avatar-size: root.large ? 120px : 80px;
     property <length> pad: root.large ? 24px : 16px;
@@ -418,6 +450,12 @@ export component ProfileCard inherits Rectangle {
                             }
                         }
                     }
+                        // What plugins add to this person's card, under their own
+                        // details, each tree under its plugin's name.
+                        for part in root.plugin-parts: PluginWidgets {
+                            part: part; subject: root.data.id;
+                            acted(plugin, slot, id, value, subject) => { root.plugin-acted(plugin, slot, id, value, subject); }
+                        }
                     if root.data.note != "": Text { text: root.data.note; color: Theme.muted; font-size: 13px; wrap: word-wrap; }
                     if !root.large && !root.preview: ActionButton { text: "View full profile"; small: true; clicked => { root.enlarge(); } }
                 }

@@ -60,6 +60,8 @@ pub mod noise;
 pub mod picture;
 #[cfg(feature = "discord")]
 pub mod playback;
+#[cfg(feature = "plugins")]
+pub mod plugins;
 #[cfg(feature = "discord")]
 pub mod ring;
 pub mod runtime;
@@ -71,6 +73,8 @@ pub mod spoiler;
 pub mod stream_audio;
 #[cfg(feature = "discord")]
 pub mod stream_worker;
+#[cfg(feature = "plugins")]
+pub use yapfast_plugins::tweaks;
 #[cfg(feature = "discord")]
 pub mod video;
 #[cfg(feature = "discord")]
