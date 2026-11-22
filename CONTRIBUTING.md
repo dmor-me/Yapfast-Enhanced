@@ -1,8 +1,8 @@
 # Contributing
 
 Bug fixes and features are both welcome. Before a large change, say what you're
-building in an issue or on the
-[Yapfast Discord server](https://yapfast.com/discord-invite), so two people
+building in an issue on the
+[Enhanced repository](https://github.com/dmor-me/Yapfast-Enhanced/issues), so two people
 don't build the same thing. A small fix can go straight to a pull request.
 
 ## Build and test
@@ -12,7 +12,7 @@ don't build the same thing. A small fix can go straight to a pull request.
 flows from `ui/*.slint` to `application/`.
 
 Nix is optional. `nix develop path:./nix` gives you the pinned toolchain and
-libraries. Without it, [Without Nix](README.md#without-nix) lists what Linux
+libraries. Without it, [Without Nix](docs/building.md#without-nix) lists what Linux
 needs, and [Building](docs/building.md#windows) covers a native Windows build.
 Build with the `fast` profile, and format before you check:
 
@@ -111,6 +111,21 @@ quality, default to the cheaper setting and put the heavier one behind a switch.
 
 Your contribution is licensed under the [GPL, version 3 or later](LICENSE), as
 the rest of Yapfast is.
+
+## Preparing source for release
+
+With Python 3.11 or newer and Git, run the lightweight source checks before publishing:
+
+```sh
+python scripts/check-enhanced-source.py
+python scripts/check-doc-links
+python scripts/check-plugin-fixtures
+python -m unittest discover -s testing -p test_enhanced_release.py
+```
+
+These checks do not compile or certify a Windows installer. Follow the
+[Enhanced release guide](docs/releasing-enhanced.md) for source tags, binary
+validation and corresponding source. Application checks remain in `scripts/check`.
 
 ## Reporting a bug
 

@@ -368,6 +368,22 @@ thread_local! {
     static PREVIEWS: RefCell<Previews> = RefCell::default();
 }
 
+pub(super) fn release_unused_previews() -> usize {
+    PREVIEWS.with_borrow_mut(|cache| {
+        let before = cache.bytes;
+        cache.images.clear();
+        cache.bytes = 0;
+        before
+    })
+}
+
+pub(super) fn prune_unused_previews() {
+    PREVIEWS.with_borrow_mut(|cache| {
+        cache.images.retain(|image| image.source.strong_count() > 0);
+        cache.bytes = cache.images.iter().map(|image| image.bytes).sum();
+    });
+}
+
 /// An animation's frames for Slint and how long each shows, in milliseconds;
 /// both empty for a still picture. The frames decode as they show.
 pub(super) fn animation(picture: &Arc<Picture>) -> (ModelRc<slint::Image>, ModelRc<i32>) {

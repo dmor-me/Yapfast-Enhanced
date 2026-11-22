@@ -1,0 +1,159 @@
+import { Theme, Label, Middle } from "theme.slint";
+import { ActionButton, IconButton } from "controls.slint";
+import { SettingsTitle, SettingsHeading, SettingsSwitch, Choices } from "settings.slint";
+import { EnhancedUpdates } from "enhanced_updates.slint";
+
+export component EnhancedSettings inherits VerticalLayout {
+    in-out property <bool> release-dm-memory;
+    callback release-dm-memory-toggled(bool);
+    callback copy-text(string);
+    callback restart;
+    property <bool> copied;
+    property <bool> confirm-clean;
+    property <bool> confirm-restart;
+    spacing: 16px; alignment: start;
+    SettingsTitle { text: "Enhanced"; }
+    Rectangle {
+        background: Theme.sidebar; border-radius: 8px;
+        HorizontalLayout {
+            padding: 16px; spacing: 16px;
+            VerticalLayout {
+                alignment: center; spacing: 4px; horizontal-stretch: 1;
+                Text { text: "Enhanced v" + EnhancedUpdates.enhanced-version; color: Theme.text; font-size: 20px; font-weight: 700; }
+                HorizontalLayout {
+                    alignment: start;
+                    Text { text: "Stable"; color: Theme.live; font-size: 13px; font-weight: 700; }
+                    Text { text: " · For v0.4.1 · 2026-11-18"; color: Theme.muted; font-size: 13px; }
+                }
+            }
+            Middle {
+                ActionButton { text: root.copied ? "Copied" : "Copy version";
+                    clicked => {
+                        root.copy-text("Enhanced v" + EnhancedUpdates.enhanced-version + " · " + EnhancedUpdates.details);
+                        root.copied = true;
+                    }
+                }
+            }
+        }
+    }
+    Timer { interval: 2s; running: root.copied; triggered => { root.copied = false; } }
+    SettingsHeading { text: "UPDATES"; }
+    Label { text: EnhancedUpdates.enhanced-message; }
+    HorizontalLayout {
+        alignment: start; spacing: 8px;
+        ActionButton {
+            text: EnhancedUpdates.enhanced-checking ? "Checking…" : "Check now";
+            icon: @image-url("icons/refresh-cw.svg"); enabled: !EnhancedUpdates.enhanced-checking;
+            clicked => { EnhancedUpdates.enhanced-check-now(); }
+        }
+        if EnhancedUpdates.enhanced-page != "": ActionButton {
+            text: "View release"; icon: @image-url("icons/external-link.svg");
+            clicked => { EnhancedUpdates.enhanced-view(); }
+        }
+    }
+    SettingsSwitch {
+        text: "Check for updates"; description: "Checks for new Enhanced versions every 6 hours.";
+        checked <=> EnhancedUpdates.check-enabled;
+        toggled(on) => { EnhancedUpdates.check-toggled(on); }
+    }
+    SettingsSwitch { text: "Install updates automatically"; description: "Not available yet."; checked: false; enabled: false; }
+    SettingsHeading { text: "LINKS"; }
+    HorizontalLayout {
+        alignment: start;
+        ActionButton { text: "GitHub"; icon: @image-url("icons/github.svg"); clicked => { EnhancedUpdates.open-github(); } }
+    }
+    SettingsHeading { text: "ENHANCED TOOLS"; }
+    SettingsSwitch {
+        text: "Release DM memory when switching chats";
+        description: "Keep direct message history on disk and reload it when you return.";
+        checked <=> root.release-dm-memory;
+        toggled(on) => { root.release-dm-memory-toggled(on); }
+    }
+    SettingsSwitch {
+        text: "Release inactive server history";
+        description: "Release server channel history when switching away. Pending sends and uploads continue.";
+        checked <=> EnhancedUpdates.server-memory;
+        toggled(on) => { EnhancedUpdates.server-memory-toggled(on); }
+    }
+    Label { text: "Media cache budget"; color: Theme.text; }
+    Label { text: "RAM retained by native plugin media previews. Visible views and other app caches can use additional memory."; }
+    Choices {
+        label: "Media cache budget"; options: ["16 MiB", "32 MiB", "64 MiB", "128 MiB", "256 MiB"];
+        current: EnhancedUpdates.cache-index; controlled: true;
+        chosen(index) => { EnhancedUpdates.cache-chosen(index); }
+    }
+    HorizontalLayout {
+        spacing: 12px;
+        Label { text: "Release cached previews that other views do not need. Keep media files on disk."; horizontal-stretch: 1; vertical-alignment: center; }
+        ActionButton { text: "Release unused previews now"; clicked => { EnhancedUpdates.release-previews(); } }
+    }
+    SettingsHeading { text: "LOCAL CACHE"; }
+    Label { text: "Remove cached media older than 7 days. Media downloads again when needed."; }
+    HorizontalLayout {
+        spacing: 8px; alignment: start;
+        ActionButton { text: "Show cache size"; enabled: !EnhancedUpdates.tool-busy; clicked => { EnhancedUpdates.scan-cache(); } }
+        ActionButton { text: "Clean older media"; enabled: !EnhancedUpdates.tool-busy; clicked => { root.confirm-clean = true; } }
+    }
+    if root.confirm-clean: HorizontalLayout {
+        spacing: 8px;
+        Label { text: "Remove eligible media files older than 7 days?"; horizontal-stretch: 1; }
+        ActionButton { text: "Clean"; clicked => { root.confirm-clean = false; EnhancedUpdates.clean-cache(); } }
+        ActionButton { text: "Cancel"; clicked => { root.confirm-clean = false; } }
+    }
+    if EnhancedUpdates.tool-message != "": Label { text: EnhancedUpdates.tool-message; }
+    HorizontalLayout {
+        Label { text: "Performance information"; color: Theme.text; horizontal-stretch: 1; vertical-alignment: center; }
+        IconButton {
+            icon: EnhancedUpdates.monitor-open ? @image-url("icons/chevron-down.svg") : @image-url("icons/chevron-right.svg");
+            label: EnhancedUpdates.monitor-open ? "Collapse performance information" : "Expand performance information";
+            clicked => { EnhancedUpdates.monitor-open = !EnhancedUpdates.monitor-open; }
+        }
+    }
+    if EnhancedUpdates.monitor-open: Rectangle {
+        background: Theme.sidebar; border-radius: 8px;
+        VerticalLayout {
+            padding: 16px; spacing: 12px;
+            HorizontalLayout {
+                Text { text: "Process"; color: Theme.muted; horizontal-stretch: 1; }
+                Text { text: "RAM / CPU"; color: Theme.muted; }
+            }
+            HorizontalLayout {
+                Label { text: "Yapfast"; color: Theme.text; horizontal-stretch: 1; }
+                Label { text: EnhancedUpdates.process-memory + " / " + EnhancedUpdates.process-cpu; }
+            }
+            HorizontalLayout {
+                Label { text: "Plugin helper"; color: Theme.text; horizontal-stretch: 1; }
+                Label { text: EnhancedUpdates.helper-memory + " / " + EnhancedUpdates.helper-cpu; }
+            }
+            Label { text: "RAM is resident process memory. CPU is normalized to the whole processor. Shared pages may appear in both processes."; }
+            SettingsHeading { text: "PLUGIN MEMORY"; }
+            for item in EnhancedUpdates.resources: VerticalLayout {
+                spacing: 4px;
+                HorizontalLayout {
+                    Label { text: item.name + " · " + item.status; color: Theme.text; horizontal-stretch: 1; }
+                    Label { text: "Limit " + item.limit; }
+                }
+                Label { text: "Wasm memory: " + item.memory; }
+            }
+            Label { text: "Per-plugin allocation telemetry is unavailable in this runtime. Limits are configured caps, separate from measured helper RAM."; }
+        }
+    }
+    SettingsHeading { text: "PLUGIN TROUBLESHOOTING"; }
+    Label { text: EnhancedUpdates.plugins-paused ? "Plugins are paused for this session." : "Restart with plugins paused to troubleshoot. Installed plugins and their settings are preserved."; }
+    HorizontalLayout {
+        alignment: start;
+        ActionButton {
+            text: EnhancedUpdates.plugins-paused ? "Restart with plugins enabled" : "Restart with plugins paused";
+            icon: @image-url("icons/refresh-cw.svg");
+            clicked => { root.confirm-restart = true; }
+        }
+    }
+    if root.confirm-restart: HorizontalLayout {
+        spacing: 8px;
+        Label { text: "Restarting ends any active call. Restart now?"; horizontal-stretch: 1; }
+        ActionButton { text: "Restart"; clicked => {
+            EnhancedUpdates.plugin-restart(!EnhancedUpdates.plugins-paused); root.restart();
+        } }
+        ActionButton { text: "Cancel"; clicked => { root.confirm-restart = false; } }
+    }
+}

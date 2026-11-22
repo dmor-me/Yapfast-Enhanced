@@ -25,7 +25,7 @@ INNO_SETUP_SHA256 = "0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b4
 # Cargo features, the suffix of file names and release tag, and the name the
 # installer shows, for each flavour scripts/build-windows builds.
 FLAVOURS = {
-    "discord": {"features": ["--no-default-features", "--features", "desktop,discord"], "suffix": "", "edition": None},
+    "discord": {"features": ["--no-default-features", "--features", "desktop,discord,plugins"], "suffix": "", "edition": None},
     "full": {"features": ["--features", "matrix"], "suffix": "-full-preview", "edition": "full preview"},
 }
 
@@ -64,7 +64,7 @@ def inno_setup():
 
 
 def compile_installer(package, version, flavour, output):
-    """Compiles packaging/windows/yapfast.iss over the ZIP's files."""
+    """Compiles the upstream base-app template packaging/windows/upstream/yapfast.iss over the ZIP's files."""
     prefix = inno_setup()
     environment = wine_environment(prefix)
 
@@ -81,7 +81,7 @@ def compile_installer(package, version, flavour, output):
     if license_path.is_file():
         definitions.append(f"/DLicenseFile={windows_path(license_path)}")
     subprocess.run(["wine", "C:\\InnoSetup\\ISCC.exe", "/Q", *definitions,
-                    f"/O{windows_path(output)}", windows_path(ROOT / "packaging/windows/yapfast.iss")],
+                    f"/O{windows_path(output)}", windows_path(ROOT / "packaging/windows/upstream/yapfast.iss")],
                    env=environment, check=True, timeout=1800)
     subprocess.run(["wineserver", "-w"], env=environment, check=True, timeout=120)
     return output / f"Yapfast-{version}{FLAVOURS[flavour]['suffix']}-windows-x64-setup.exe"
@@ -98,6 +98,9 @@ def main():
     flavour = FLAVOURS[args.flavour]
     output = args.output or ROOT / "target/dist" / args.flavour
     executable = args.exe.resolve()
+    helper = executable.with_name("yapfast-plugins.exe")
+    if not helper.is_file():
+        raise SystemExit("Plugin helper is missing; build yapfast-plugins for Windows before packaging")
     newest_input = max(path.stat().st_mtime for path in
                        [ROOT / "Cargo.toml", ROOT / "Cargo.lock", ROOT / "build.rs",
                         *list((ROOT / "src").rglob("*.rs")), *list((ROOT / "ui").rglob("*")),
@@ -140,6 +143,9 @@ def main():
         package = temporary / f"{base}-windows-x64"
         package.mkdir()
         shutil.copy2(executable, package / "yapfast.exe")
+        # The plugin system's helper: the app starts it, and a package without
+        # it has the feature and nothing to run a plugin with.
+        shutil.copy2(helper, package / "yapfast-plugins.exe")
         shutil.copy2(ROOT / "LICENSE", package / "LICENSE.txt")
         # The source snapshot goes beside the packages, on the release page,
         # rather than into every install; SOURCE.txt says where.

@@ -2738,6 +2738,14 @@ pub struct CommandRun {
 /// Commands only the linked Discord account carries out.
 #[derive(Clone)]
 pub enum DiscordCommand {
+    /// The native plugin gallery is showing a known favorite from this account.
+    FavoritePreview {
+        src: String,
+        result: UnboundedSender<Option<Arc<Picture>>>,
+    },
+    ReleaseDmMemory(bool),
+    ReleaseServerMemory(bool),
+    ReleaseUnusedPreviews,
     /// Fetches the Activity panel's feed; [`Event::ActivityFeed`] follows,
     /// and [`Event::ActivityFeedDue`] when it's time to ask again.
     ActivityFeed,
@@ -4207,6 +4215,12 @@ pub enum Event {
     /// Discord's servers, voice channels and who is in them.
     #[cfg(feature = "discord")]
     Discord(Arc<yapfast_discord::service::Snapshot>),
+    /// The plugin system: a hook's answer or a plugin's state change from the
+    /// bridge, or something a tap saw that a plugin subscribed to. It arrives
+    /// by the same path as every other event, which is how a held send
+    /// completes without anything polling for it.
+    #[cfg(feature = "plugins")]
+    Plugin(crate::application::plugins::News),
     /// The video [`Command::PlayVideo`] plays, as it changes; none once it stops.
     Video(Option<Video>),
     /// The voice message [`Command::PlayVoiceMessage`] plays, as it
@@ -4712,6 +4726,9 @@ pub enum Event {
     Sync(bool),
     Error(String),
     LoggedOut,
+    /// The plugin runtime changed what a plugin draws.
+    #[cfg(feature = "plugins")]
+    PluginSlot(crate::plugins::slots::Output),
 }
 
 pub fn sort_members(members: &mut [ChatMember]) {
@@ -5251,6 +5268,9 @@ pub async fn run(
         Ok(discord) => (discord, None),
         Err(error) => (None, Some(discord_failed(&error))),
     };
+    #[cfg(feature = "discord")]
+    let mut release_dm_memory = false;
+    let mut release_server_memory = false;
     // Voice reaches Discord through this, so linking and unlinking reach it too.
     #[cfg(feature = "discord")]
     let linked =
@@ -5346,6 +5366,18 @@ pub async fn run(
                 }
                 #[cfg(feature = "discord")]
                 Route::Discord => match command {
+                    Command::Discord(DiscordCommand::ReleaseServerMemory(release)) => {
+                        release_server_memory = release;
+                        if let Some(discord) = discord.as_mut() {
+                            discord.command(Command::Discord(DiscordCommand::ReleaseServerMemory(release)), &events);
+                        }
+                    }
+                    Command::Discord(DiscordCommand::ReleaseDmMemory(release)) => {
+                        release_dm_memory = release;
+                        if let Some(discord) = discord.as_mut() {
+                            discord.command(Command::Discord(DiscordCommand::ReleaseDmMemory(release)), &events);
+                        }
+                    }
                     Command::Discord(DiscordCommand::Start) => {
                         if discord.is_none() {
                             // Linking saved the login just before.
@@ -5353,7 +5385,13 @@ pub async fn run(
                                 started.ok_or_else(|| anyhow::anyhow!("its login wasn't saved"))
                             });
                             match started {
-                                Ok(started) => {
+                                Ok(mut started) => {
+                                    if release_server_memory {
+                                        started.command(Command::Discord(DiscordCommand::ReleaseServerMemory(true)), &events);
+                                    }
+                                    if release_dm_memory {
+                                        started.command(Command::Discord(DiscordCommand::ReleaseDmMemory(true)), &events);
+                                    }
                                     discord = Some(started);
                                     discord_error = None;
                                 }

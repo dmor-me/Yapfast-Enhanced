@@ -1,482 +1,181 @@
 <p align="center">
-  <img src="packaging/icon.svg" width="96" height="96" alt="">
+  <img src="packaging/windows/branding/yapfast-enhanced.png" width="96" height="96" alt="Yapfast Enhanced Ribbon E logo">
 </p>
 
-<h1 align="center">Yapfast</h1>
+<h1 align="center">Yapfast Enhanced</h1>
 
 <p align="center">
-  <a href="https://github.com/yapfast/yapfast/releases/latest"><img src="https://img.shields.io/github/v/release/yapfast/yapfast?label=beta&color=f0b232" alt="The latest release, a beta"></a>
-  <a href="#get-started"><img src="https://img.shields.io/badge/Windows%20%7C%20Linux-0078D4" alt="Windows and Linux"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/yapfast/yapfast?color=blue" alt="License: GPL 3.0"></a>
-  <a href="https://yapfast.com/discord-invite"><img src="https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white" alt="Join the Yapfast Discord server"></a>
-</p>
-
-<p align="center">
-  <b>A Discord client without the web browser.</b><br>
-  About 30 MB of RAM idle, where Discord's app takes 720 MB (<a href="#measured-against-discord">measured as Vesktop</a>).
+  Native plugin support for Yapfast.<br>
+  Install, manage and run WebAssembly plugins from inside the app.
 </p>
 
 <p align="center">
-  Native app written in Rust · Voice, video and screen sharing
-</p>
-
-<p align="center">
-  <a href="#windows-10-and-11"><b>Download for Windows</b></a>
+  <a href="https://github.com/dmor-me/Yapfast-Enhanced/releases/tag/v0.4.1.0"><strong>Download for Windows</strong></a>
   &nbsp;·&nbsp;
-  <a href="#linux"><b>Download for Linux</b></a>
+  <a href="#installation">Installation</a>
   &nbsp;·&nbsp;
-  <a href="https://yapfast.com">yapfast.com</a>
+  <a href="docs/plugins/README.md">Plugin development</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/dmor-me/Yapfast-Enhanced/issues">Report an issue</a>
 </p>
 
-<p align="center">
-  <img src="docs/images/yapfast.png" alt="Yapfast showing a group DM, with the server list on the left, the conversation in the middle and its members on the right"><br>
-  <sub>A test account on a fake Discord server. Nobody in there said any of this, or endorses Yapfast (sadly).</sub>
-</p>
+**Enhanced v0.4.1.0** supports **official Yapfast v0.4.1 on Windows 11 x64**.
+Download links become available when a matching Windows release is published.
+The source can be built independently using the instructions below.
 
-## Why?
+## What is Yapfast Enhanced?
 
-Discord's desktop app is a whole ass Chromium running Discord's website, and it
-sits at about 720 MB of RAM doing nothing (insane, I know right?!?). That
-annoyed me enough to write my own in Rust.
+Yapfast Enhanced extends Yapfast's native Rust/Slint application with a plugin
+manager and an Extism/WebAssembly runtime. The installer adds the compatible
+Enhanced build to your existing Yapfast installation. You continue using your
+usual shortcut, accounts and settings.
 
-Yapfast does the same job (doing nothing) in about 30 MB. There's no browser
-engine anywhere in it or near it: it talks to Discord's API itself and draws its
-own window with [Slint](https://slint.dev) and Skia, like a game would. Your
-servers, DMs, friends, voice and GIFs are all there, and if you know Discord,
-you already know where everything is.
-
-It opens fast af, too. I timed both, from clicking the icon to reading my
-messages: Discord took 8 seconds on my Windows PC, Yapfast took 0.22 seconds,
-because it shows the messages it saved last time and catches up while you read.
-
-## Measured against Discord
-
-<table>
-  <tr><th></th><th>Vesktop memory</th><th>Yapfast memory</th><th>Vesktop CPU</th><th>Yapfast CPU</th></tr>
-  <tr><td>Idle</td><td>724 MB</td><td>30 MB (−96%)</td><td>0.11%</td><td>0.015% (−86%)</td></tr>
-  <tr><td>Image-heavy channel</td><td>706 MB</td><td>41 MB (−94%)</td><td>0.17%</td><td>0.008% (−95%)</td></tr>
-  <tr><td>In a call</td><td>888 MB</td><td>44 MB (−95%)</td><td>0.46%</td><td>0.33% (−28%)</td></tr>
-  <tr><td>Sharing your screen¹</td><td>1,013 MB</td><td>113 MB (−89%)</td><td>2.15%</td><td>1.1% (−48%)</td></tr>
-  <tr><th></th><th colspan="2">Discord</th><th colspan="2">Yapfast</th></tr>
-  <tr><td>Opening the app²</td><td colspan="2" align="center">8 s</td><td colspan="2" align="center">0.22 s (36× faster)</td></tr>
-</table>
-
-<details>
-<summary><b>About these numbers</b></summary>
-
-<br>
-
-Vesktop is basically Discord's own app: the same Discord web app, in the same
-Electron, with Vencord on top. So its numbers stand in for Discord's. CPU counts
-the whole processor as 100%.
-
-¹ Sharing a 1920×1080 monitor at 30 frames a second, while in the call.
-Yapfast encodes on the graphics card when it has an encoder, here an NVIDIA
-RTX 3090 sending H264. Encoding on the processor with x264 instead, it takes
-2.5%, a little more than Vesktop.
-
-² From clicking the icon to reading your messages, against Discord's own app
-rather than Vesktop, timed on my Windows PC. Yapfast shows the messages it saved
-last time and catches up while you read.
-
-Memory and CPU measured on 25 October 2026, and screen sharing on 27 October,
-all on the same PC. The machine, what "memory" counts and how each scenario ran
-are in [the measurements](docs/measurements/README.md). Your numbers will depend
-on how many servers and DMs you have.
-
-</details>
+The integration builds on
+[blockgameentity/yapfast's plugin branch](https://github.com/blockgameentity/yapfast/tree/feat/plugins).
+Yapfast itself is developed by the
+[upstream Yapfast project](https://github.com/yapfast/yapfast).
 
 ## Features
 
-### The GIF picker
+- An in-app plugin manager with Marketplace, Installed and Add from URL.
+- A [GitHub-hosted marketplace](https://github.com/dmor-me/yapfast-plugin-registry)
+  with reviewed, commit-pinned listings.
+- Installation from supported HTTPS Git repositories, including GitHub and
+  Codeberg, plus local plugin imports.
+- Enable, disable, update, roll back and uninstall plugins.
+- Persistent plugin settings, data and permission grants.
+- Capability and network-host permission controls, integrity checks and recent logs.
+- Native media-browser support for plugins such as Favorite GIF Folders.
+- An Enhanced settings page with manual and optional six-hour release checks.
+- Optional DM and server-history memory release, a native plugin preview budget,
+  unused-preview release and cleanup of older cached media.
+- Process resource readings and restart controls for troubleshooting plugins.
 
-My favorite part :p Your favorites live on disk as 40 KB clips, so they're
-there the moment it opens, and you're done sitting there cringing while the
-GOATed GIF loads.
+Plugins target Yapfast's plugin manifest and API. See the
+[plugin development guide](docs/plugins/README.md) and the
+[Ping example](plugins/ping/README.md) to get started.
 
-<img src="docs/images/features/gif-picker.webp" alt="The GIF picker opening on its favorites over #general, and one of them sent to the channel.">
+## Screenshots and quick tour
 
-### Voice, cameras and Go Live
+Captured from **Enhanced 0.4.1.0** using a separate local demo profile.
+No real account or conversations are shown.
 
-Voice channels and DM calls, with mute, deafen, a volume for each person,
-noise suppression, echo removal, and a voice gate you can tune, or
-push-to-talk on any key or combination, held in any app. Keybinds mute,
-deafen or push to mute from any app too ([keybinds](docs/keybinds.md)). Go
-Live, watch other people's streams, turn on your camera and play the
-soundboard. The call stays up while you read other channels, busy voice
-channels say how long their call has gone on, and pointing at a Discord
-voice channel shows who is in it, who is live and whose camera is on.
+### Enhanced settings and memory tools
 
-The noise suppression could be better, though. Know an open source one that
-does a better job? PLEASE tell me.
+Open **Settings → Enhanced** to check your version, check GitHub for updates,
+and adjust the optional memory tools. DM and server-history release are off
+by default; enable them to release history from RAM when switching away while
+keeping the disk cache. The preview budget controls native plugin media previews.
 
-<img src="docs/images/features/voice.webp" alt="A voice channel of seven people, two with their cameras on. One person's stream opens large, then the grid comes back.">
-
-### Forums and polls
-
-Browse a forum's posts as cards, with their tags, first message, top reaction
-and thumbnail, search them, post in them, and read one beside the forum. Vote
-in polls, watch the votes come in, make your own and end them early.
-
-<img src="docs/images/features/forum.webp" alt="A help forum's posts as cards; one opens beside the list with its replies, then closes.">
-
-<p align="center">
-  <img src="docs/images/features/poll.webp" width="640" alt="A movie night poll: an answer is picked and voted for, and the results fill in.">
-</p>
-
-### Themes
-
-Ten of them, Catppuccin and Tokyo Night among them, and Bonfire, which is
-Discord's own colors. Or make your own in the editor, and watch the window
-change as you type each color.
-
-<img src="docs/images/features/themes.webp" alt="The same channel in each of the ten built-in themes, one after another.">
-
-### Games on your profile
-
-The game you play, found among your running programs on Linux, Windows and
-macOS, Steam's and Wine's included, and on Linux the Rich Presence games send,
-with details, elapsed time, images and buttons.
-
-**Settings → Game activity** turns sharing on and off as Discord's own setting
-does, and names games Yapfast doesn't know. See
-[game detection](docs/discord/people.md#game-detection) and
-[Rich Presence](docs/discord/people.md#linux-rich-presence).
-
-What your linked Spotify account plays shows as "Listening to Spotify" with only
-Yapfast open, from any player, as Discord's own "Display Spotify as your status"
-setting says. See [Spotify](docs/discord/people.md#listening-to-spotify).
-
-<p align="center">
-  <img src="docs/images/features/playing.webp" width="260" alt="A profile card saying Playing Deadlock, with the game's icon.">
-</p>
-
-### Running a server
-
-Server Settings with roles, emoji, stickers, bans, the audit log and the rest of
-the pages your roles let you use, and channel settings with their permissions.
-Make and edit channels and categories, invite people, hand out roles, change
-nicknames, time out, kick and ban. In voice, server mute, deafen and move people
-to another channel, from their menu or by dragging them there. Edit your server
-profile, and leave. Join a server by invite, from the + under your servers or a
-link in chat, and open a scheduled event from its link to mark yourself
-interested. Folders show up as they do in Discord.
-
-<p align="center">
-  <img src="docs/images/features/server-settings.webp" width="640" alt="Server Settings on a role's Display page: its name, a gold color picked, and its icon.">
-</p>
-
-### Everything else
-
-- **Servers, channels, DMs and group DMs**, all live, with member lists. Pin,
-  mute or close a DM from its menu, leave a group DM, and accept or ignore
-  message requests.
-- **Messages** you can send, reply to, edit, react to, pin, forward, mark
-  unread, copy a link to and attach files to, with Markdown, embeds, custom
-  emoji, stickers and spoilers. Voice messages play, with their speed and
-  volume. Bots' buttons, dropdown menus and forms work too, radio buttons,
-  checkboxes and file uploads included, and so do apps' slash commands: type
-  `/`, pick one and fill in its options, files and autocomplete included; an
-  app's answer says who used which command. Apps' message and user commands
-  are under Apps in a message's or a person's menu. Discord's own links to servers, channels, messages and profiles open in
-  Yapfast, including one handed to it by the desktop.
-- **Threads**: start one from a message, browse a channel's threads, join or
-  leave one, and read it beside its channel.
-- **Search** a whole server with Discord's filters, and browse a channel's pins.
-- **Profiles** as Discord draws them: badges, server tags, avatar decorations,
-  nameplates, name styles, profile effects and frames, and the full profile's
-  Board, Wishlist and recent activity. Edit Profile changes your own theme,
-  name style and server tag.
-- **Friends**: requests, adding by username, nicknames, notes, profile cards,
-  your status and custom status (custom emoji included). Block and ignore
-  people from their menu, block and unblock them from their profile, hide what
-  blocked people write, and unblock them from a list in Settings. Active Now
-  sits beside the friends list.
-- **Notifications** that follow your Discord settings, muting for channels,
-  categories and servers, and unread markers.
-- **Soft sounds** for joining, leaving, muting and messages, in six sets.
-
-### Not there yet
-
-- Activities.
-- Making and changing server folders.
-- A server's form for new members, such as its rules, when you join. Yapfast
-  sends you to Discord in your browser to fill it in.
-- Captchas, sort of. If Discord asks for one while you link or join a server,
-  Yapfast opens it in your browser, but I haven't hit one against real
-  Discord yet, so who knows..
-
-Use Discord in a browser for these until then; it has all of it, and you have a
-browser open anyway. [The Discord plan](docs/discord/README.md) has the rest, in the
-order I'm working on it.
-
-It's a beta, and it's what I use for Discord every day, so it had better
-be usable. Still, there are rough edges; when you hit one,
-[open an issue](https://github.com/yapfast/yapfast/issues) and I'll fix it, or
-come hang out on the [Yapfast Discord server](https://yapfast.com/discord-invite)
-and tell me there.
-
-### Not for you?
-
-- [Vesktop](https://vesktop.dev) if you want plugins. Yapfast has none yet
-  (they're coming, dw), and Vesktop ships with Vencord's.
-- [Ripcord](https://cancel.fm/ripcord/) if you want something even plainer.
-  It's native too, but closed source, and it does Slack on the side.
-
-## Will Discord ban me?
-
-> [!WARNING]
-> Probably not, but I can't promise it. Third-party clients, Yapfast included,
-> are against Discord's Terms of Service. In practice Discord rarely bans anyone
-> for using one; the accounts that get banned are almost always spamming or
-> running automation. Yapfast only does what you click, and keeps to the same
-> limits Discord's own app does.
->
-> If losing your account would be a disaster, don't use any third-party client,
-> this one or another. And don't post screenshots of it in a server whose
-> moderators might ban you for it. Yapfast tells you all this again before it
-> shows the sign-in code.
-
-## Where your messages go
-
-Straight from your PC to Discord, or to your Matrix server. I don't run a
-Yapfast server, so nothing in between could keep a copy (I'd have to pay for
-servers just to snoop on your DMs, and no thanks :D).
-
-- You link your account by scanning a QR code with Discord's phone app, so
-  Yapfast never sees your password.
-- The login token stays in your system's credential store, and only ever goes
-  to Discord. Unlinking signs that session out and deletes it.
-- It sends no analytics or crash reports. It looks for updates only if you
-  turn on **Check for updates** in **Settings → About**, with one request to
-  GitHub that says nothing about you.
-- Pictures and GIFs load from wherever they're hosted, such as Discord or
-  Tenor.
-
-Don't want to take my word for it? Fair, the code's all right here.
-
-## Get started
-
-### Windows 10 and 11
-
-1. Download `Yapfast-…-windows-x64-setup.exe` from the
-   [latest release](https://github.com/yapfast/yapfast/releases/latest).
-2. Run it. It installs just for you, with no administrator prompt. The
-   installer isn't signed yet, so SmartScreen may get nervous: choose **More
-   info**, then **Run anyway**.
-3. Yapfast shows a QR code. On your phone, open Discord, go to **Settings →
-   Scan QR Code**, and point the camera at it.
-
-Rather skip the installer? The release has a portable ZIP too: extract it and
-double-click `yapfast.exe`.
-
-Yapfast starts with Windows and waits in the tray, so messages and calls still
-reach you. Untick that in the installer, or turn it off later in **Settings →
-Advanced**.
-
-### Linux
-
-It runs great on both X11 and Wayland, screen sharing too (Hyprland here).
-Every release has two packages, on the
-[latest release](https://github.com/yapfast/yapfast/releases/latest):
-
-- **AppImage**, `Yapfast-…-x86_64.AppImage`, for any distro with glibc 2.39 or
-  newer, like Ubuntu 24.04, Fedora 40 or Debian 13. Make it executable
-  (`chmod +x`, or "Allow executing" in its properties) and run it. It adds
-  itself to your app menu, and uses your own graphics driver, Mesa or NVIDIA.
-- **Arch package**, `yapfast-…-x86_64.pkg.tar.zst`. Install it with
-  `sudo pacman -U` and the file or its link. Rather build it yourself? The
-  [PKGBUILD](packaging/arch/PKGBUILD) builds the release's tag from source.
-
-Then link your account with the QR code, as on Windows.
+![Enhanced 0.4.1.0 settings showing release checks, optional history release and media cache controls](docs/images/enhanced/enhanced-settings.png)
 
 <details>
-<summary><b>With Nix</b></summary>
+<summary>See performance information and plugin troubleshooting</summary>
 
-<br>
+Open **Performance information** to view application and plugin-helper RAM/CPU
+readings. These are live process readings, not per-plugin measurements or
+promised memory usage. This demo has no plugins running.
+Use **Restart with plugins paused** when troubleshooting; plugin settings are kept.
 
-It's one command (pretty sure, anyway :D), and you get the same Discord-only
-app the releases ship, in your launcher:
-
-```sh
-nix profile add github:yapfast/yapfast#yapfast
-```
-
-It compiles from source, so give it a few minutes. An older glibc and no Nix?
-Then [build it yourself](#build-it-yourself).
+![Enhanced 0.4.1.0 performance panel showing process resource readings and restart with plugins paused](docs/images/enhanced/performance-information.png)
 
 </details>
 
-### Updates
+To install a plugin, open **Settings → Plugins**, choose **Marketplace** or
+**Add from URL**, review its permissions and install it. Manage enabled plugins
+under **Installed**. For local packages, use **Advanced → Install from file**.
+See the [plugin guide](docs/plugins/README.md) for supported APIs and examples.
 
-Turn on **Check for updates** in **Settings → About**, and Yapfast tells you
-when a new release is out. The Windows installer's copy and the AppImage can
-then update themselves with **Update and restart**; they install only a
-release signed with Yapfast's key. Update the portable ZIP and the Arch
-package the way you installed them.
+## Installer choices
 
-### macOS
+- [Universal online installer](https://github.com/dmor-me/Yapfast-Enhanced/releases/download/v0.4.1.0/Yapfast-Enhanced-Universal-Installer.exe): detects your exact Yapfast build and opens its matching verified installer.
+- [Version-specific offline installer](https://github.com/dmor-me/Yapfast-Enhanced/releases/tag/v0.4.1.0): for official Yapfast 0.4.1.
 
-Not yet, sorry :( I'd love to make one, but I don't own an Apple machine to
-test it on.
+The universal installer requires internet and published compatibility releases.
+Unsupported builds stay unchanged. [How detection and verification work](docs/universal-installer.md).
 
-<details>
-<summary><b>Nightly builds</b></summary>
+## Installation
 
-<br>
+### Supported Windows build
 
-Want what's on `main` right now, without waiting for a release or building it
-yourself? Every now and then I put out a nightly build of the Discord-only app.
-They're on the [releases page](https://github.com/yapfast/yapfast/releases),
-marked **Pre-release**, newest first, each with a list of what changed:
+This package supports **Windows 11 x64 with official Yapfast 0.4.1 x64**.
+The installer checks the exact supported executable fingerprint.
+Each future Yapfast release requires a matching Enhanced compatibility build.
 
-- **Windows:** the portable ZIP. Extract it and double-click `yapfast.exe`.
-- **Linux:** the AppImage. `chmod +x` it and run it.
-- **Arch Linux:** the `.pkg.tar.zst`. Install it with `sudo pacman -U` and the
-  file or its link.
+1. Install the supported official version of
+   [Yapfast](https://github.com/yapfast/yapfast/releases).
+2. Download `Yapfast-Enhanced-Installer.exe` from
+   [Enhanced Releases](https://github.com/dmor-me/Yapfast-Enhanced/releases).
+3. Finish active calls and uploads. Setup will close Yapfast automatically.
+4. Run the installer and select the folder containing `yapfast.exe`.
+   The usual location is `%LOCALAPPDATA%\Programs\Yapfast`.
+5. Launch Yapfast using your usual shortcut and open **Settings → Plugins**.
 
-They're untested between releases, so expect the odd rough edge.
+The installer keeps a verified backup for restoration. Release downloads include
+`SHA256SUMS.txt` for checking file integrity. Current development installers are
+unsigned.
 
-</details>
+See the [Windows installation guide](docs/enhanced-inplace.md) for compatibility,
+recovery and restoration details.
 
-## Other questions
+### Installing plugins
 
-<details>
-<summary><b>What about Matrix?</b></summary>
+Use **Marketplace** for the maintained catalog, or paste a plugin's Git
+repository address under **Add from URL**, such as
+`https://github.com/owner/yapfast-plugin`.
+For local packages, use **Advanced → Install from file**.
+Review the requested permissions and enable the plugin.
 
-<br>
+Favorite GIF Folders is a separate plugin installed through the plugin manager.
+This source tree includes the small Ping example.
 
-Yapfast started as a [Matrix](https://matrix.org) client, and Matrix still
-works: encrypted rooms, Spaces as servers, and voice channels over MatrixRTC, in
-the same window as Discord. The release is Discord-only for now, so
-[build it yourself](#build-it-yourself) to get both.
+## Updates and restoration
 
-After that I'd like Telegram, Signal, WhatsApp, Instagram and Messenger in there
-too. No clue when, but hopefully at some point :p
+Check **Settings → Enhanced → Check now** for Enhanced releases.
+Enable **Check for updates** for checks every six hours while Yapfast runs.
+Automatic Enhanced update installation is planned for a future version.
 
-</details>
+Official Yapfast updates require a matching Enhanced compatibility package to
+continue running plugins. If a matching package is unavailable, the verified
+official update can proceed and plugin support pauses until a compatible
+Enhanced package is installed.
 
-<details>
-<summary><b>Why not Tauri?</b></summary>
+To restore the supported original executable, open **Windows Settings → Apps →
+Installed apps → Yapfast Enhanced → Uninstall**. Account and plugin data are
+preserved. See the [restoration guide](docs/enhanced-inplace.md#restore).
 
-<br>
+## Source and building
 
-Tauri apps run a website too; they just borrow your system's web view instead
-of shipping their own Chromium. The browser is the exact thing I wanted gone, so
-hell no.
+This repository contains the Enhanced application source, plugin API, runtime
+helper, installer manager, Slint UI, vendored patches and packaging scripts.
 
-</details>
+- [Native build instructions](docs/building.md#windows)
+- [Enhanced build and release guide](docs/releasing-enhanced.md)
+- [Changelog](CHANGELOG.md)
+- [Attribution and dependency notices](NOTICE.md)
+- [Enhanced settings and tools](docs/enhanced-tools.md)
+- [Architecture](docs/architecture.md)
+- [Plugin API and SDKs](docs/plugins/README.md)
+- [Contributing](CONTRIBUTING.md)
+- [Experimental module-loader prototype](tools/yapfast-enhanced-loader/README.md) (development only)
+- [Documentation index](docs/README.md)
 
-<details>
-<summary><b>Why draw on the processor?</b></summary>
+The application source is in `src/`, `ui/` and `crates/`. Plugin authors can use
+the SDKs in `pdk/`, the manifest schemas in `schemas/`, and the Ping example in
+`plugins/`. Windows packaging lives in `packaging/windows/` and `scripts/`.
+Local build caches and installer outputs are excluded from source publication.
 
-<br>
+Build the application and `yapfast-plugins.exe` helper together. The installer
+also includes `yapfast-enhanced-manager.exe`, built from
+`tools/yapfast-enhanced-manager`.
 
-It already keeps a 180 Hz monitor fed, and it takes less memory. There's a GPU
-renderer too, behind **Render with the GPU** in Settings, if you'd rather use
-that.
+## Credits and license
 
-</details>
+Yapfast Enhanced includes upstream Yapfast and the plugin implementation from
+`blockgameentity/yapfast` at commit
+`cb31511cb33337925a777fec9c05e52399634924`.
+Their authors retain their credits and copyright notices.
 
-<details>
-<summary><b>Can I use my Vencord plugins?</b></summary>
-
-<br>
-
-Nope. They need a JavaScript runtime, and Yapfast's insides look nothing like
-what they expect. Yapfast will get plugins of its own, though, and open source
-Vencord ones could be ported once it does.
-
-</details>
-
-<details>
-<summary><b>How is it different from Serein?</b></summary>
-
-<br>
-
-Serein draws with wgpu, which costs more memory before you've opened a single
-channel. Yapfast draws with Slint, on the processor by default (WAY lighter) or
-the GPU if you ask. It also does Matrix (from source, for now), DeepFilterNet
-noise suppression on top of RNNoise, voice gates, and the cached GIF picker.
-It's still missing a few things, like media channels and activities.
-
-</details>
-
-<details>
-<summary><b>Did you use AI to write it?</b></summary>
-
-<br>
-
-Yep. Opus 5.5 wrote most of the code, and 6.1 Sol and 6 Astra did adversarial
-review and helped with the nastiest bugs (networking protocols mixed with VP8 is
-a bit much for a side project :D). It wasn't one prompt and done, though. I've
-used it every day for weeks, profiled it with perf, read the code, and bent the
-UX to my muscle memory, so switching over hurts as little as it can.
-
-</details>
-
-## Build it yourself
-
-Yapfast builds inside a pinned [Nix](https://nixos.org) environment, which
-brings the right Rust, Clang and native libraries. From the project folder:
-
-```sh
-# Try the UI without an account
-nix develop path:./nix --command cargo run --locked -- --preview
-
-# Run it for real, with Discord and Matrix
-nix develop path:./nix --command cargo run --locked
-
-# Discord only, like the release
-nix develop path:./nix --command cargo run --locked --no-default-features --features desktop,discord
-
-# Windows installer and ZIP, cross-built from Linux, into target/dist
-nix develop path:./nix#windows --command scripts/build-windows
-
-# Format, lint and test everything
-scripts/check --fast
-```
-
-### Without Nix
-
-On Linux, `cargo run --locked` works without Nix too, with rustup, which
-installs Rust 1.97.1 from `rust-toolchain.toml`, and the tools and libraries
-the Arch package builds with, in `packaging/arch/PKGBUILD`. Cargo downloads
-the same libwebrtc and Skia archives the Nix shell pins, except that the
-Nix shell renames one libjpeg table in Skia's (`nix/prepare-skia-native.py`).
-Without that, libwebrtc and Skia both define `jpeg_natural_order`, so
-`build.rs` links such a build with `--allow-multiple-definition`; the two
-tables are the same.
-
-| Read this | For |
-| --- | --- |
-| [Contributing](CONTRIBUTING.md) | What a pull request needs: checks, memory numbers, commit style |
-| [Development](docs/development.md) | Day-to-day work: the preview, local Matrix and LiveKit servers, voice tests |
-| [Architecture](docs/architecture.md) | How `yapfast-core` and the Slint client fit together |
-| [Building](docs/building.md) | Toolchain, Cargo features, checks, releases |
-| [Discord](docs/discord/README.md) | What's done, what's next, and the fake server the tests use |
-| [Voice](docs/voice.md) | Calls, devices and audio processing |
-| [Windows](docs/windows-beta.md) | Packaging, the installer and Windows checks |
-| [Measurements](docs/measurements/README.md) | How memory and CPU are measured |
-
-## License
-
-Yapfast is free software under the [GNU General Public License](LICENSE),
-version 3 or later. Builds with Matrix also include MatrixRTC libraries under
-the AGPL. Every release carries its dependencies' own licenses. Take it, I
-don't even care, baka.
-
-## Thanks
-
-Yapfast speaks to Discord the way its own apps do, as documented by
-[Discord Userdoccers](https://docs.discord.food), a community effort to
-document the user side of Discord's API. Thanks to everyone who writes it <3
-
-It stands on [Slint](https://slint.dev), [Skia](https://skia.org),
-[LiveKit](https://livekit.io) and WebRTC,
-[matrix-rust-sdk](https://github.com/matrix-org/matrix-rust-sdk) and
-[DeepFilterNet](https://github.com/Rikorose/DeepFilterNet). My patches to
-Slint live in [`vendor/`](vendor), with the rest of the code.
-
-<sub>Yapfast isn't affiliated with or endorsed by Discord Inc. Discord is a
-trademark of Discord Inc.</sub>
+Yapfast Enhanced is distributed under **GPL-3.0-or-later**.
+See [LICENSE](LICENSE). Vendored dependencies retain their own licenses and
+notices in their respective directories.

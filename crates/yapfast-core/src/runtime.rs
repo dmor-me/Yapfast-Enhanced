@@ -1,3 +1,4 @@
+pub use tokio::time::timeout;
 use std::{
     future::Future,
     pin::Pin,
@@ -46,6 +47,11 @@ impl BackgroundRuntime {
 
     pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         self.runtime.block_on(future)
+    }
+
+    /// The runtime's handle, for work another crate spawns here.
+    pub fn handle(&self) -> tokio::runtime::Handle {
+        self.runtime.handle().clone()
     }
 }
 

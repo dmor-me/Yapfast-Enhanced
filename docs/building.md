@@ -326,6 +326,14 @@ build; and the desktop smoke test, which runs `target/<profile>/yapfast`,
 the desktop build, from that build. These build the default features, the
 release's: Discord on the desktop (see [Networks](#networks)).
 
+The plugin steps then check and test `yapfast-plugin-api`,
+`yapfast-plugins` and `yapfast-plugin-host`, whose tests build the helper and
+drive it with the WAT fixtures in `testing/plugins`, and check and test
+`yapfast-core` with the `plugins` feature. None of that is in the default workspace build above, so an
+everyday build links neither Extism nor wasmtime; see
+[plugins](plugins/README.md). The plugin measurements are explicit runs, not a
+gate; see [the measurement method](measurements/README.md#the-plugin-helper).
+
 `scripts/check --matrix` adds the builds with Matrix, after those and one at
 a time, as each compile of the UI crate takes several GiB of memory: Clippy
 and the tests with Matrix beside Discord, Clippy for the Matrix-only build,
@@ -486,7 +494,7 @@ compiling Yapfast. The executable uses static CRT linkage to match LiveKit.
 the default, or the full preview with Matrix, and passes the options to
 `scripts/package-windows.py`, such as `--no-installer`.
 `scripts/package-windows.py`, which `scripts/build-windows` runs, makes the
-flavour's portable ZIP and compiles the installer, `packaging/windows/yapfast.iss`, with
+flavour's portable ZIP and compiles the installer, `packaging/windows/upstream/yapfast.iss`, with
 Inno Setup 7.1.0 under Wine. The first run downloads Inno Setup's installer,
 pinned by SHA-256, and installs it into its own Wine prefix in
 `.local/windows/inno-setup`, under `xvfb-run`, since it opens windows even
@@ -596,3 +604,19 @@ See [sessions](sessions.md) for credential storage and headless sign-in.
 The service only allows the local `synapse` homeserver to create SFU rooms. This
 does not establish a production friend-group or room-membership access policy.
 That policy remains part of the encrypted calling experiment.
+
+## Without Nix
+
+On Linux, `cargo run --locked` works without Nix too, with rustup, which
+installs Rust 1.97.1 from `rust-toolchain.toml`, and the tools and libraries
+the Arch package builds with, in `packaging/arch/PKGBUILD`. Cargo downloads
+the same libwebrtc and Skia archives the Nix shell pins, except that the
+Nix shell renames one libjpeg table in Skia's (`nix/prepare-skia-native.py`).
+Without that, libwebrtc and Skia both define `jpeg_natural_order`, so
+`build.rs` links such a build with `--allow-multiple-definition`; the two
+tables are the same.
+
+## macOS
+
+The source retains macOS code paths, but Enhanced currently publishes only the
+supported Windows x64 package. No tested Enhanced macOS installer is available.

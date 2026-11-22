@@ -29,6 +29,11 @@ impl Notifier {
         #[cfg(any(target_os = "linux", windows))]
         {
             let (requests, alerts) = std::sync::mpsc::channel();
+            #[cfg(windows)]
+            if crate::ui::isolated_display() {
+                // The test window shares a desktop with the installed app.
+                return Self { requests };
+            }
             #[cfg(target_os = "linux")]
             let _ = root;
             #[cfg(windows)]

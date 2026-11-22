@@ -62,6 +62,12 @@ export global Updates {
     /// Downloads the newest release, checks it, and restarts Yapfast into it.
     callback install();
     callback cancel-install();
+    in property <bool> enhanced-warning;
+    in property <bool> enhanced-checking;
+    in property <string> enhanced-warning-text;
+    in property <string> enhanced-continue-text;
+    callback confirm-enhanced-update();
+    callback cancel-enhanced-update();
     /// Opens the newest release's page in the browser.
     callback view();
     callback open-website();

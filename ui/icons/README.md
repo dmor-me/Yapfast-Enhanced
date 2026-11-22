@@ -15,12 +15,13 @@ glyphs such as check, x and chevrons.
   headphones (headphones-round), history, image (gallery), inbox, link, lock,
   log-out (logout-2), message-circle (chat-round), message-square-text
   (chat-square), palette (palette-2), pause, pencil (pen), phone, phone-off
-  (end-call), pin, play, refresh-cw (refresh), scissors, send-horizontal
-  (plain), settings, shield, smile and smile-plus (smile-circle), square-pen
-  (pen-new-square), star (star, Linear style), star-filled (star), sticky-note
-  (notes), text-select (text-selection), trash-2 (trash-bin-trash),
-  trending-up (graph-up), triangle-alert (danger-triangle), user, users
-  (users-group-rounded), video (videocamera) and keyboard.
+  (end-call), pin, play, plugins (widget-add, taken on 2026-11-09),
+  refresh-cw (refresh), scissors, send-horizontal (plain), settings, shield,
+  smile and smile-plus (smile-circle), square-pen (pen-new-square), star
+  (star, Linear style), star-filled (star), sticky-note (notes), text-select
+  (text-selection), trash-2 (trash-bin-trash), trending-up (graph-up),
+  triangle-alert (danger-triangle), user, users (users-group-rounded) and
+  video (videocamera) and keyboard.
 - Adapted from Solar: headphone-off, eye-off, pin-off and video-off are the
   icon of the same name with a slash, and a gap cut around it; screen-share is
   Solar's monitor with an arrow cut out of its screen, and screen-share-off
@@ -58,7 +59,7 @@ github.svg is GitHub's mark from Simple Icons 16.34.0 (CC0 1.0), filled
 white. It marks the GitHub link in About, and GitHub's logo guidelines apply to
 it rather than the ISC licence.
 
-logo.svg is the app's own mark, the Shout balloon from the Yapfast logo
+logo.svg is Enhanced's own Ribbon E mark on the original Yapfast starburst
 sketches: a comic shout balloon with typing dots cut out of it.
 
 scroll-up, scroll-down, scroll-left and scroll-right are the scrollbar arrows of
@@ -66,6 +67,8 @@ Slint 1.18.1's Fluent style (https://slint.dev/), unmodified, under Slint's
 licence (GPL-3.0-only, the Royalty-free License 2.0 or the Software License 3.0).
 
 - Drawn for Yapfast: eyedropper, for the name style window's own colour.
+- Enhanced: enhanced.svg contains the Ribbon E path from the Enhanced branding
+  logo, used as a standalone settings navigation icon.
 - Drawn for Yapfast: moon and sun, for the name style preview light and dark switch.
 - Drawn for Yapfast: shop, for the profile editor.
 - Drawn for Yapfast: pen, for the profile editor name field.

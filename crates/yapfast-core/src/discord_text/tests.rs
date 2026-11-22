@@ -675,7 +675,7 @@ fn closed_channels_follow_live_events_and_open_again() {
     let mut first = OpenChannel::new("discord:10:11").unwrap();
     first.loaded(Load::Latest, shown(page([3, 5])));
     channels.open = Some(first);
-    channels.close();
+    channels.close(None);
     assert!(channels.open.is_none());
     channels.follow(&Live::Created(message("7", None)));
     assert!(channels.get_mut("discord:10:11").is_some());
@@ -685,7 +685,7 @@ fn closed_channels_follow_live_events_and_open_again() {
     assert!(channels.reopen("discord:10:11").is_none(), "taken out");
     for channel in 0..=KEPT_CHANNELS as u64 {
         channels.open = OpenChannel::new(&format!("discord:10:{channel}"));
-        channels.close();
+        channels.close(None);
     }
     assert_eq!(channels.recent.len(), KEPT_CHANNELS);
     assert!(
@@ -695,12 +695,81 @@ fn closed_channels_follow_live_events_and_open_again() {
 }
 
 #[test]
+fn releasing_dm_memory_leaves_servers_and_pending_uploads() {
+    let mut channels = Channels::default();
+    let mut dm = OpenChannel::new("discord:@me:11").unwrap();
+    dm.shown.messages.insert(3, message("3", None));
+    dm.pending.push(Pending {
+        nonce: "upload".into(),
+        body: "pending".into(),
+        reply: None,
+        options: Default::default(),
+        files: vec![],
+        failed: false,
+    });
+    channels.open = Some(dm);
+    channels.close(None);
+    channels.open = OpenChannel::new("discord:10:99");
+    channels.close(None);
+
+    channels.set_release_dms(true);
+    assert!(channels.reopen("discord:@me:11").is_none());
+    assert!(channels.reopen("discord:10:99").is_some());
+    assert_eq!(channels.dm_sends["discord:@me:11"][0].nonce, "upload");
+
+    let (done, _) = tokio::sync::mpsc::unbounded_channel();
+    let (events, _) = tokio::sync::mpsc::unbounded_channel();
+    finished(
+        Done::Sent {
+            room: "discord:@me:11".into(),
+            nonce: "upload".into(),
+            result: Err("offline".into()),
+        },
+        None,
+        &mut channels,
+        &done,
+        &events,
+    );
+    assert!(channels.dm_sends["discord:@me:11"][0].failed);
+
+    channels.set_release_dms(false);
+    channels.open = OpenChannel::new("discord:@me:12");
+    channels.close(None);
+    assert!(channels.reopen("discord:@me:12").is_some());
+}
+
+#[test]
+fn releasing_server_history_preserves_dms_and_pending_uploads() {
+    let mut channels = Channels::default();
+    let mut server = OpenChannel::new("discord:10:11").unwrap();
+    server.pending.push(Pending {
+        nonce: "server-upload".into(), body: "pending".into(), reply: None,
+        options: Default::default(), files: vec![], failed: false,
+    });
+    channels.open = Some(server);
+    channels.close(None);
+    channels.open = OpenChannel::new("discord:@me:99");
+    channels.close(None);
+    channels.set_release_servers(true);
+    assert!(channels.reopen("discord:10:11").is_none());
+    assert!(channels.reopen("discord:@me:99").is_some());
+    assert_eq!(channels.dm_sends["discord:10:11"][0].nonce, "server-upload");
+    channels.open = OpenChannel::new("discord:10:12");
+    channels.close(None);
+    assert!(channels.reopen("discord:10:12").is_none());
+    channels.set_release_servers(false);
+    channels.open = OpenChannel::new("discord:10:12");
+    channels.close(None);
+    assert!(channels.reopen("discord:10:12").is_some());
+}
+
+#[test]
 fn a_busy_closed_channel_keeps_only_its_newest_messages() {
     let mut channels = Channels::default();
     let mut busy = OpenChannel::new("discord:10:11").unwrap();
     busy.loaded(Load::Latest, shown(page([1, 2])));
     channels.open = Some(busy);
-    channels.close();
+    channels.close(None);
     let total = KEPT_MESSAGES as u64 + 50;
     for id in 3..=total {
         channels.follow(&Live::Created(message(&id.to_string(), None)));
