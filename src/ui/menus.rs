@@ -38,6 +38,8 @@ pub(super) type Menu = (Vec<MenuRow>, Vec<Vec<MenuRow>>);
 /// What a server's, conversation's or person's menu offers; nothing for one
 /// Yapfast doesn't know.
 pub(super) fn menu(adapter: &Adapter, id: &str, person: bool) -> Menu {
+    #[cfg(feature = "plugins")]
+    let id_is_header = id.starts_with(HEADER);
     if let Some(place) = id.strip_prefix(BELL) {
         return Notify::of(adapter, place)
             .map_or_else(Menu::default, |notify| notify.bell(adapter));
@@ -203,20 +205,7 @@ pub(super) fn menu(adapter: &Adapter, id: &str, person: bool) -> Menu {
                 text: text.into(),
                 subtitle: subtitle.into(),
                 icon: icon.clone(),
-                danger: matches!(
-                    choice,
-                    MenuChoice::Unfriend
-                        | MenuChoice::Block
-                        | MenuChoice::Timeout
-                        | MenuChoice::Kick
-                        | MenuChoice::Ban
-                        | MenuChoice::ServerMute
-                        | MenuChoice::ServerDeafen
-                        | MenuChoice::Disconnect
-                        | MenuChoice::DeleteChannel
-                        | MenuChoice::LeaveServer
-                        | MenuChoice::TransferOwnership
-                ),
+                danger: danger(choice),
                 separated,
                 checkbox,
                 checked,
@@ -229,6 +218,21 @@ pub(super) fn menu(adapter: &Adapter, id: &str, person: bool) -> Menu {
         for row in &mut rows {
             notify.dress(adapter, row);
         }
+    }
+    #[cfg(feature = "plugins")]
+    if let Some(overrides) = adapter.ui_overrides()
+        && let Some(target) = super::plugins::menu_target(
+            adapter,
+            id,
+            super::plugins::Shape {
+                person,
+                voice: in_voice.is_some(),
+                thread: thread.is_some(),
+                header: id_is_header,
+            },
+        )
+    {
+        super::plugins::edit_menu(adapter, overrides, target, &mut rows);
     }
     let submenus = rows
         .iter()
@@ -254,6 +258,25 @@ pub(super) fn menu(adapter: &Adapter, id: &str, person: bool) -> Menu {
         })
         .collect();
     (rows, submenus)
+}
+
+/// A destructive choice, drawn in red. Plugins can't change these rows;
+/// `yapfast_core::plugins::ui::DANGER_ROWS` lists them by id.
+fn danger(choice: MenuChoice) -> bool {
+    matches!(
+        choice,
+        MenuChoice::Unfriend
+            | MenuChoice::Block
+            | MenuChoice::Timeout
+            | MenuChoice::Kick
+            | MenuChoice::Ban
+            | MenuChoice::ServerMute
+            | MenuChoice::ServerDeafen
+            | MenuChoice::Disconnect
+            | MenuChoice::DeleteChannel
+            | MenuChoice::LeaveServer
+            | MenuChoice::TransferOwnership
+    )
 }
 
 /// What a menu row says for a choice, and its icon.
@@ -670,6 +693,10 @@ pub(super) fn choose(
     person: bool,
     id: &str,
 ) {
+    #[cfg(feature = "plugins")]
+    if super::plugins::choose(adapter, window, &target, id) {
+        return;
+    }
     // A checkbox shows its new state at once, as the menu stays open.
     let ticked = toggle(window, id);
     // Someone's menu in a voice channel acts on them in its server.

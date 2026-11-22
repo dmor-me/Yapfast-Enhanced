@@ -171,8 +171,17 @@ impl<'a> Video<'a> {
         Self::open_with(source, sound, threads)
     }
 
+    /// Opens only the audio stream for a bounded plugin sound.
+    pub(crate) fn open_sound(source: impl Source + 'a) -> Option<Self> {
+        Self::open_mode(source, 2, 1)
+    }
+
     /// As [`Self::open`], decoding on up to `threads` threads.
     fn open_with(source: impl Source + 'a, sound: bool, threads: usize) -> Option<Self> {
+        Self::open_mode(source, c_int::from(sound), threads)
+    }
+
+    fn open_mode(source: impl Source + 'a, sound: c_int, threads: usize) -> Option<Self> {
         let mut source: Box<Box<dyn Source + 'a>> = Box::new(Box::new(source));
         let mut info = Info::default();
         // SAFETY: the source stays boxed in the video for as long as FFmpeg reads it.
@@ -182,7 +191,7 @@ impl<'a> Video<'a> {
                 read_source,
                 seek_source,
                 threads as c_uint,
-                c_int::from(sound),
+                sound,
                 &mut info,
             )
         };

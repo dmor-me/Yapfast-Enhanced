@@ -17,6 +17,13 @@ pub(super) fn command(
     let Command::Discord(command) = command else {
         return Some(command);
     };
+    // A preview requester always receives an answer, including while signed out.
+    if discord.is_err() && matches!(&command, DiscordCommand::FavoritePreview { .. }) {
+        if let DiscordCommand::FavoritePreview { result, .. } = command {
+            let _ = result.send(None);
+        }
+        return None;
+    }
     let discord = match (&command, discord) {
         (
             DiscordCommand::GifCategories
@@ -25,7 +32,8 @@ pub(super) fn command(
             | DiscordCommand::GifPicked { .. }
             | DiscordCommand::FavoriteGifs
             | DiscordCommand::SetFavoriteGifs(_)
-            | DiscordCommand::GifPicture { .. },
+            | DiscordCommand::GifPicture { .. }
+            | DiscordCommand::FavoritePreview { .. },
             Ok(discord),
         ) => discord.clone(),
         (DiscordCommand::GifCategories, Err(why)) => {
@@ -54,6 +62,30 @@ pub(super) fn command(
     };
     let events = events.clone();
     match command {
+        DiscordCommand::FavoritePreview { src, result } => {
+            tokio::spawn(async move {
+                // The plugin does not get an arbitrary Discord-network fetch:
+                // the URL must already belong to this account's favorites.
+                let favorites = match discord.kept_favorite_gifs().await {
+                    Some(kept) => Some(kept),
+                    None => discord.favorite_gifs().await.ok(),
+                };
+                let source = favorites.and_then(|items| {
+                    items
+                        .into_iter()
+                        .find(|item| item.src == src || item.url == src)
+                        .map(|item| item.src)
+                });
+                let picture = if let Some(source) = source {
+                    favorite_picture(&discord, &source, 256, 180)
+                        .await
+                        .map(Arc::new)
+                } else {
+                    None
+                };
+                let _ = result.send(picture);
+            });
+        }
         DiscordCommand::GifCategories => {
             tokio::spawn(async move {
                 let result = discord
@@ -508,5 +540,27 @@ mod tests {
         let url = "https://media.tenor.com/abc/small.gif";
         let kept = thumbnail(url, &download(url, &small), 32).unwrap();
         assert_eq!(std::fs::read(kept).unwrap(), small);
+    }
+}
+
+#[cfg(test)]
+mod plugin_preview_tests {
+    use super::*;
+    #[tokio::test]
+    async fn a_signed_out_favorite_preview_is_consumed_and_answers_none() {
+        let (result, mut answer) = tokio::sync::mpsc::unbounded_channel();
+        let (events, _) = tokio::sync::mpsc::unbounded_channel();
+        assert!(
+            command(
+                Command::Discord(DiscordCommand::FavoritePreview {
+                    src: "https://cdn.discordapp.com/untrusted.png".into(),
+                    result,
+                }),
+                Err("signed out"),
+                &events
+            )
+            .is_none()
+        );
+        assert!(answer.recv().await.unwrap().is_none());
     }
 }

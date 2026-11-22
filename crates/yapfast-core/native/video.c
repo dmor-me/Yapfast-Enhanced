@@ -218,6 +218,29 @@ struct yapfast_video *yapfast_video_open(void *source, yapfast_read read, yapfas
     yapfast_video_free(video);
     return NULL;
   }
+  if (sound == 2) {
+    video->stream = -1;
+    /* An MP3's rate and channels are in its frames, not in a header. */
+    if (avformat_find_stream_info(video->format, NULL) < 0) {
+      yapfast_video_free(video);
+      return NULL;
+    }
+    open_sound(video);
+    if (video->sound_stream < 0) {
+      yapfast_video_free(video);
+      return NULL;
+    }
+    for (unsigned index = 0; index < video->format->nb_streams; index++) {
+      if ((int)index != video->sound_stream) video->format->streams[index]->discard = AVDISCARD_ALL;
+    }
+    video->start = video->format->start_time == AV_NOPTS_VALUE ? 0 : video->format->start_time;
+    info->duration_ms = video->format->duration != AV_NOPTS_VALUE
+                            ? video->format->duration / (AV_TIME_BASE / 1000)
+                            : -1;
+    info->sample_rate = video->sample_rate;
+    info->channels = video->channels;
+    return video;
+  }
   video->stream = av_find_best_stream(video->format, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
   if (video->stream < 0) {
     yapfast_video_free(video);
@@ -414,7 +437,7 @@ static int feed(struct yapfast_video *video) {
     /* A damaged file shows what came before the damage. */
     if (read < 0) {
       video->sent_all = 1;
-      if (video->decoder == DECODER_AVCODEC) avcodec_send_packet(video->context, NULL);
+      if (video->context && video->decoder == DECODER_AVCODEC) avcodec_send_packet(video->context, NULL);
       if (video->sound_context) avcodec_send_packet(video->sound_context, NULL);
       return 0;
     }
@@ -463,7 +486,7 @@ static int feed(struct yapfast_video *video) {
  * or a negative number when the video can't play. */
 int yapfast_video_next(struct yapfast_video *video, int64_t *time_ms) {
   for (;;) {
-    int got = receive_picture(video, time_ms);
+    int got = video->stream >= 0 ? receive_picture(video, time_ms) : 0;
     if (got < 0) return got;
     if (got) {
       if (video->planes.width <= 0 || video->planes.height <= 0 ||

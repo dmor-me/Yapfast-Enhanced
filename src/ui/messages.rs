@@ -414,6 +414,22 @@ pub(super) fn show_message(window: &YapfastWindow, index: usize, item: &str, lit
 /// A message as the timeline shows it. `revealed` holds the spoilers clicked, as
 /// `{item}/{index}` for text and `{item}/a{index}` for attachments, and what
 /// was picked or shown on polls; see `polls`.
+/// A row with its pictures and files kept out of view, which is what a plugin
+/// that declared `messages.filter` asked for: the row keeps its text, and the
+/// galleries, stickers and file cards go. A link preview's pictures stay with
+/// its card, which is the page's and not the message's. Called where the row
+/// is built, so a row built for a message whose media a plugin hid never shows
+/// them, and the models it holds are left empty rather than filled.
+#[cfg(feature = "plugins")]
+pub(super) fn hide_media(row: &mut MessageRow) {
+    if row.images.row_count() == 0 && row.stickers.row_count() == 0 && row.files.row_count() == 0 {
+        return;
+    }
+    row.images = ModelRc::default();
+    row.stickers = ModelRc::default();
+    row.files = ModelRc::default();
+}
+
 pub(super) fn message_row(message: &ChatMessage, revealed: &HashSet<String>) -> MessageRow {
     // Plain text shows as typed, its web addresses linked.
     // Mentions link to who they mention, which opens their card.
@@ -691,6 +707,7 @@ pub(super) fn message_row(message: &ChatMessage, revealed: &HashSet<String>) -> 
             })
             .unwrap_or_default(),
         has_poll: message.poll.is_some(),
+        plugin: ModelRc::default(),
     };
     if collapsed(message, revealed) {
         // Discord shows nothing of a blocked message until asked.

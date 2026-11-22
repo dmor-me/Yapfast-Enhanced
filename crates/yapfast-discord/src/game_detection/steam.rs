@@ -301,9 +301,11 @@ mod tests {
         assert!(
             steam
                 .matches(
-                    &path
+                    &dir.path()
+                        .canonicalize()
+                        .unwrap()
+                        .join("steamapps/common/FixtureOther/game")
                         .to_string_lossy()
-                        .replace("Fixture/game", "FixtureOther/game")
                 )
                 .is_none()
         );

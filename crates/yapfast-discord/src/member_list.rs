@@ -20,6 +20,7 @@ pub const ROWS: usize = 100;
 /// One person in the list, ready to show.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListedMember {
+    pub bot: bool,
     pub user_id: String,
     pub name: String,
     pub username: Option<String>,
@@ -299,6 +300,7 @@ impl MemberList {
                         person.roles = roles;
                     }
                     members.push(ListedMember {
+                        bot: names.is_bot(user),
                         user_id: user.clone(),
                         name: names
                             .name(&self.guild, user)

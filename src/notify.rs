@@ -25,6 +25,15 @@ impl Notifier {
         #[cfg(target_os = "linux")]
         {
             let (requests, alerts) = std::sync::mpsc::channel();
+            #[cfg(windows)]
+            if crate::ui::isolated_display() {
+                // The test window shares a desktop with the installed app.
+                return Self { requests };
+            }
+            #[cfg(target_os = "linux")]
+            let _ = root;
+            #[cfg(windows)]
+            let root = root.to_owned();
             let started = std::thread::Builder::new()
                 .name("yapfast-notify".into())
                 .spawn(move || linux::run(alerts, opened));
