@@ -1,4 +1,5 @@
 /target
+/.release/
 /result
 /inspirations
 /.local
@@ -18,3 +19,26 @@ __pycache__/
 /deploy/
 /DESIGN.md
 /PRODUCT.md
+# Agent transcripts from review runs, which name files and quote code.
+/.audit-*.jsonl
+
+# Build outputs in standalone plugin, SDK and installer-manager workspaces.
+**/target/
+**/node_modules/
+*.pyc
+.venv/
+venv/
+
+# Credentials, signing material and machine-specific configuration.
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+*.pem
+.DS_Store
+Thumbs.db
+
+# Local standalone manager build output.
+/target-manager/

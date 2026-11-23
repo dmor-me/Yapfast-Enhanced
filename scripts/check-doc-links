@@ -12,13 +12,13 @@ def anchor(heading):
     return re.sub(r'[^\w\- ]', '', heading.strip().lower()).replace(' ', '-')
 
 
-documents = [ROOT / name for name in ('README.md', 'CLAUDE.md', 'CONTRIBUTING.md')]
+documents = [ROOT / name for name in ('README.md', 'CLAUDE.md', 'CONTRIBUTING.md', 'CHANGELOG.md', 'NOTICE.md')]
 documents += sorted((ROOT / 'docs').rglob('*.md'))
 broken = []
 for document in documents:
     if not document.exists():
         continue
-    for line_number, line in enumerate(document.read_text().splitlines(), 1):
+    for line_number, line in enumerate(document.read_text(encoding='utf-8').splitlines(), 1):
         for target in re.findall(r'\]\(([^)\s]+)\)', line):
             if re.match(r'[a-z]+:', target):
                 continue
@@ -28,7 +28,7 @@ for document in documents:
             if not destination.exists():
                 broken.append(f'{where} (no such file)')
             elif fragment and destination.suffix == '.md':
-                headings = re.findall(r'^#+ (.*)$', destination.read_text(), re.M)
+                headings = re.findall(r'^#+ (.*)$', destination.read_text(encoding='utf-8'), re.M)
                 if fragment not in {anchor(heading) for heading in headings}:
                     broken.append(f'{where} (no such heading)')
 print('\n'.join(broken) or 'Every link resolves.')

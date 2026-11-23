@@ -1,0 +1,42 @@
+name: Bug report
+description: Report a reproducible issue in Yapfast Enhanced
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: "Please remove account tokens, personal messages and private paths from logs."
+  - type: input
+    id: version
+    attributes:
+      label: Enhanced and Yapfast versions
+      description: Copy version from Settings → Enhanced, and include your Windows version.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Installer or restoration
+        - Plugins or permissions
+        - Enhanced tools or memory
+        - Updates
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps and expected behavior
+      description: Include what happened instead and whether it happens after restarting with plugins paused.
+    validations:
+      required: true
+  - type: textarea
+    id: plugins
+    attributes:
+      label: Plugins involved
+      description: Plugin name, version and public source URL, if relevant.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots or relevant logs

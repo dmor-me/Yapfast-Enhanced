@@ -1,0 +1,33 @@
+export struct EnhancedPluginResource { name: string, status: string, memory: string, limit: string }
+
+export global EnhancedUpdates {
+    in property <string> details: "Stable · For v0.4.1 · 2026-11-18";
+    in-out property <bool> check-enabled;
+    in-out property <bool> server-memory;
+    in property <int> cache-index: 2;
+    in property <bool> plugins-paused;
+    in property <string> tool-message;
+    in property <bool> tool-busy;
+    in-out property <bool> monitor-open;
+    in property <string> process-memory: "Reading…";
+    in property <string> process-cpu: "Reading…";
+    in property <string> helper-memory: "Reading…";
+    in property <string> helper-cpu: "Reading…";
+    in property <[EnhancedPluginResource]> resources;
+    callback check-toggled(bool);
+    callback server-memory-toggled(bool);
+    callback cache-chosen(int);
+    callback release-previews();
+    callback scan-cache();
+    callback clean-cache();
+    callback plugin-restart(bool);
+    in property <string> enhanced-version;
+    in property <string> enhanced-message: "Check GitHub for Yapfast Enhanced releases.";
+    in property <bool> enhanced-checking;
+    in property <string> enhanced-page;
+    callback enhanced-check-now();
+    callback enhanced-view();
+    callback open-github();
+}
+
+

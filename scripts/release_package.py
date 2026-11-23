@@ -10,8 +10,8 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_FILES = ("Cargo.toml", "Cargo.lock", "build.rs", "rust-toolchain.toml", "README.md", "LICENSE", ".gitignore")
-SOURCE_DIRECTORIES = (".cargo", "src", "ui", "packaging", "crates", "scripts", "nix", "vendor", "testing", "docs")
+SOURCE_FILES = ("Cargo.toml", "Cargo.lock", "build.rs", "rust-toolchain.toml", "README.md", "CONTRIBUTING.md", "CHANGELOG.md", "NOTICE.md", "LICENSE", ".gitignore", ".gitattributes", "flake.nix", "flake.lock")
+SOURCE_DIRECTORIES = (".cargo", ".config", ".github", "src", "ui", "packaging", "crates", "scripts", "nix", "vendor", "testing", "docs", "pdk", "plugins", "schemas", "tools", "marketplace")
 
 
 def digest(path):
@@ -62,7 +62,14 @@ def source_snapshot(metadata, base, temporary, destination):
     # a nightly's Linux and Windows jobs, zip the same snapshot.
     committed = int(subprocess.check_output(["git", "log", "-1", "--format=%ct"], cwd=ROOT, timeout=30))
     for path in source.rglob("*"):
-        os.utime(path, (committed, committed), follow_symlinks=False)
+        try:
+            os.utime(path, (committed, committed), follow_symlinks=False)
+        except NotImplementedError:
+            # Windows Python may lack no-follow utime. This private snapshot
+            # contains copied files, so only regular paths may use the fallback.
+            if path.is_symlink():
+                raise
+            os.utime(path, (committed, committed))
     zip_directory(source, destination)
     return rtc is not None
 

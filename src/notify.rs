@@ -29,6 +29,11 @@ impl Notifier {
         #[cfg(any(target_os = "linux", windows))]
         {
             let (requests, alerts) = std::sync::mpsc::channel();
+            #[cfg(windows)]
+            if crate::ui::isolated_display() {
+                // The test window shares a desktop with the installed app.
+                return Self { requests };
+            }
             #[cfg(target_os = "linux")]
             let _ = root;
             #[cfg(windows)]
@@ -232,21 +237,11 @@ mod linux {
 #[cfg(windows)]
 const KEPT: usize = 20;
 
-/// The 256-pixel picture in Yapfast's icon file, which is stored as a PNG.
+/// A native PNG for Windows toast notifications. The installer ICO can use
+/// bitmap frames, so it is not a reliable source of PNG-encoded bytes.
 #[cfg(any(windows, test))]
 fn icon_png() -> Option<&'static [u8]> {
-    const ICON: &[u8] = include_bytes!("../packaging/windows/yapfast.ico");
-    let count = u16::from_le_bytes(ICON.get(4..6)?.try_into().ok()?);
-    (0..usize::from(count)).find_map(|index| {
-        let entry = ICON.get(6 + index * 16..)?.get(..16)?;
-        // A width of 0 is 256.
-        if entry[0] != 0 {
-            return None;
-        }
-        let size = u32::from_le_bytes(entry[8..12].try_into().ok()?) as usize;
-        let start = u32::from_le_bytes(entry[12..16].try_into().ok()?) as usize;
-        ICON.get(start..start.checked_add(size)?)
-    })
+    Some(include_bytes!("../packaging/windows/branding/yapfast-enhanced.png"))
 }
 
 /// A Windows path as a `file:` URI, which a toast takes its pictures by.
@@ -415,6 +410,7 @@ mod tests {
     fn the_icon_has_a_png_picture() {
         let png = super::icon_png().unwrap();
         assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
+        assert!(image::load_from_memory(png).is_ok(), "toast icon must decode as an image");
     }
 
     #[test]

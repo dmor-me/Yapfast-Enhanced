@@ -1,0 +1,41 @@
+name: Experimental loader checks
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/yapfast-enhanced-loader/**'
+      - 'crates/yapfast-plugin-api/**'
+      - '.github/workflows/loader-prototype.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/yapfast-enhanced-loader/**'
+      - 'crates/yapfast-plugin-api/**'
+      - '.github/workflows/loader-prototype.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Install the repository Rust toolchain
+        run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+      - name: Check standalone loader formatting
+        run: cargo fmt --manifest-path tools/yapfast-enhanced-loader/Cargo.toml -- --check
+      - name: Check standalone loader code
+        run: cargo clippy --locked --release --all-targets --manifest-path tools/yapfast-enhanced-loader/Cargo.toml -- -D warnings
+      - name: Build loader and module
+        run: cargo build --locked --release --manifest-path tools/yapfast-enhanced-loader/Cargo.toml
+      - name: Run loader unit tests
+        run: cargo test --locked --release --manifest-path tools/yapfast-enhanced-loader/Cargo.toml
+
+# These checks do not run or publish an official-app compatibility test. The
+# explicit local cross-version harness and reports cover that separately.

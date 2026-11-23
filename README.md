@@ -1,3 +1,84 @@
+# Yapfast Enhanced v0.4.0.0
+
+Native plugin support for **official Yapfast 0.4.0 on Windows 11 x64**.
+This compatibility branch preserves Yapfast 0.4.0's interface and capabilities.
+
+- [Download Enhanced 0.4.0.0](https://github.com/dmor-me/Yapfast-Enhanced/releases/tag/v0.4.0.0) — version-specific offline installer, compatibility bundle and checksums.
+- [Latest supported Enhanced source](https://github.com/dmor-me/Yapfast-Enhanced/tree/main)
+- [Compatibility and validation](docs/compatibility-0.4.0.md)
+- [Installation and recovery](docs/enhanced-inplace.md)
+- [Plugin development](docs/plugins/README.md)
+- [Attribution and full source](NOTICE.md)
+
+## Features
+
+- Marketplace, Installed and Add from URL plugin management.
+- Extism/WebAssembly execution with permission checks, plugin settings and logs.
+- Plugin installation, enable/disable, updates, rollback and uninstall.
+- Enhanced settings with optional memory tools and GitHub release checks.
+- Scoped installer shutdown, compressed offline repair files and original-app restoration.
+
+## Screenshots and quick tour
+
+Captured from **Enhanced 0.4.0.0** using a separate local demo profile.
+No real account or conversations are shown.
+
+### Enhanced settings and memory tools
+
+Open **Settings → Enhanced** to check your version, check GitHub for updates,
+and adjust the optional memory tools. DM and server-history release are off
+by default; enable them to release history from RAM when switching away while
+keeping the disk cache. The preview budget controls native plugin media previews.
+
+![Enhanced 0.4.0.0 settings showing release checks, optional history release and media cache controls](docs/images/enhanced/enhanced-settings.png)
+
+<details>
+<summary>See performance information and plugin troubleshooting</summary>
+
+Open **Performance information** to view application and plugin-helper RAM/CPU
+readings. These are live process readings, not per-plugin measurements or
+promised memory usage. This demo has no plugins running.
+Use **Restart with plugins paused** when troubleshooting; plugin settings are kept.
+
+![Enhanced 0.4.0.0 performance panel showing process resource readings and restart with plugins paused](docs/images/enhanced/performance-information.png)
+
+</details>
+
+To install a plugin, open **Settings → Plugins**, choose **Marketplace** or
+**Add from URL**, review its permissions and install it. Manage enabled plugins
+under **Installed**. For local packages, use **Advanced → Install from file**.
+See the [plugin guide](docs/plugins/README.md) for supported APIs and examples.
+
+## Installation
+
+1. Install official Yapfast 0.4.0 x64, or use its portable copy.
+2. Download `Yapfast-Enhanced-Installer.exe` from the matching release above.
+3. Finish calls/uploads, then choose the existing folder containing `yapfast.exe`.
+   Setup closes that installation and preserves account and plugin data.
+4. Open **Settings → Plugins**. Enhanced tools and release checks are under **Enhanced**.
+
+Downloads become available after the matching release is published. The installer
+is unsigned and checks the exact supported binary fingerprint. Other Yapfast
+versions are refused; installation never silently upgrades or downgrades Yapfast.
+Favorite GIF Folders is a separate plugin, not preinstalled.
+
+## Source and building
+
+This branch includes the full Yapfast 0.4.0 application and Enhanced source,
+plugin SDK/runtime, installer manager and packaging scripts.
+See the [native build guide](docs/building.md#windows) and
+[Enhanced release guide](docs/releasing-enhanced.md).
+The 0.4.1 keybind settings page is not included; 0.4.0's push-to-talk controls remain.
+
+## Credits and license
+
+Based on [Yapfast](https://github.com/yapfast/yapfast) and the plugin implementation
+from [blockgameentity/yapfast](https://github.com/blockgameentity/yapfast/tree/feat/plugins).
+Distributed under **GPL-3.0-or-later**; see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
+
+<details>
+<summary>Original Yapfast 0.4.0 README (upstream reference)</summary>
+
 <p align="center">
   <img src="packaging/icon.svg" width="96" height="96" alt="">
 </p>
@@ -467,3 +548,5 @@ Slint live in [`vendor/`](vendor), with the rest of the code.
 
 <sub>Yapfast isn't affiliated with or endorsed by Discord Inc. Discord is a
 trademark of Discord Inc.</sub>
+
+</details>

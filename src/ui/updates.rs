@@ -40,6 +40,12 @@ pub(super) struct State {
     installing: Option<Installing>,
     /// Why the last update failed.
     install_error: String,
+    /// Consent is tied to this exact release; late checks cannot revive Cancel.
+    pending: Option<Release>,
+    preflight_id: u64,
+    preflight_checking: bool,
+    warning: String,
+    continue_text: String,
     /// An update that is ready for `main` to finish once the window closes.
     pub(super) prepared: Option<install::Prepared>,
 }
@@ -105,10 +111,14 @@ pub(super) fn show(window: &YapfastWindow, layout: &Layout, state: &State) {
     shown.set_latest(latest.into());
     shown.set_error(error.into());
     shown.set_notes(notes.into());
-    shown.set_can_install(can_install && state.installing.is_none());
+    shown.set_can_install(can_install && state.installing.is_none() && state.pending.is_none());
     shown.set_install_note(install_note.into());
     shown.set_install_error(state.install_error.clone().into());
     shown.set_installing(state.installing.is_some() || state.prepared.is_some());
+    shown.set_enhanced_warning(state.pending.is_some());
+    shown.set_enhanced_checking(state.preflight_checking);
+    shown.set_enhanced_warning_text(state.warning.clone().into());
+    shown.set_enhanced_continue_text(state.continue_text.clone().into());
 }
 
 /// Whether Update and restart is offered for `release`, and the line under it:
@@ -146,9 +156,12 @@ fn show_progress(window: &YapfastWindow, progress: &Progress) {
 
 /// Downloads the newest release for this install, and ends the window once it
 /// is ready to finish. A failure is shown in About and leaves everything as it was.
-fn start_install(adapter: &Rc<RefCell<Adapter>>) {
+fn request_install(adapter: &Rc<RefCell<Adapter>>) {
     let mut guard = adapter.borrow_mut();
-    if guard.updates.installing.is_some() || guard.updates.prepared.is_some() {
+    if guard.updates.installing.is_some()
+        || guard.updates.prepared.is_some()
+        || guard.updates.pending.is_some()
+    {
         return;
     }
     let Some(Ok(found)) = &guard.updates.found else {
@@ -157,6 +170,117 @@ fn start_install(adapter: &Rc<RefCell<Adapter>>) {
     let Some(Outcome::Available(release)) = outcome(&guard.layout, found) else {
         return;
     };
+    let enhanced = cfg!(windows)
+        && (cfg!(feature = "plugins")
+            || std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|p| p.join(".yapfast-enhanced/state.json")))
+                .is_some_and(|p| p.is_file()));
+    if !enhanced {
+        drop(guard);
+        start_install(adapter, release);
+        return;
+    }
+    guard.updates.preflight_id = guard.updates.preflight_id.wrapping_add(1);
+    let id = guard.updates.preflight_id;
+    let target = release.tag.clone();
+    guard.updates.pending = Some(release);
+    guard.updates.preflight_checking = true;
+    guard.updates.warning = format!("Checking Enhanced availability for Yapfast {target}…");
+    guard.updates.continue_text.clear();
+    let work = guard
+        .runtime
+        .spawn(super::enhanced_updates::listed_for(target.clone()));
+    if let Some(window) = guard.window.upgrade() {
+        show(&window, &guard.layout, &guard.updates);
+    }
+    let weak = Rc::downgrade(adapter);
+    drop(guard);
+    if slint::spawn_local(async move {
+        let result = work
+            .await
+            .unwrap_or_else(|_| Err("The compatibility check stopped.".into()));
+        let Some(adapter) = weak.upgrade() else {
+            return;
+        };
+        complete_preflight(&adapter, id, &target, result);
+    })
+    .is_err()
+    {
+        cancel_preflight(adapter);
+        let mut a = adapter.borrow_mut();
+        a.updates.install_error = "Could not start the compatibility check. Try again.".into();
+        if let Some(window) = a.window.upgrade() {
+            show(&window, &a.layout, &a.updates);
+        }
+    }
+}
+fn complete_preflight(
+    adapter: &Rc<RefCell<Adapter>>,
+    id: u64,
+    target: &str,
+    result: Result<bool, String>,
+) {
+    let mut a = adapter.borrow_mut();
+    if a.updates.preflight_id != id || a.updates.pending.is_none() {
+        return;
+    }
+    a.updates.preflight_checking = false;
+    let (message, button) = match result {
+        Ok(true) => (
+            format!(
+                "An Enhanced package is listed for Yapfast {target}. Its exact build will be verified after updating. If it cannot be applied, Yapfast will start without Enhanced settings or plugins. Your saved plugin data stays on disk. Continue?"
+            ),
+            "Update and restart",
+        ),
+        Ok(false) => (
+            format!(
+                "No Enhanced package is listed for Yapfast {target}. Updating may leave you with plain Yapfast, without Enhanced settings or plugins. Your saved plugin data stays on disk. You can restore Enhanced when a matching package is published. Continue without Enhanced?"
+            ),
+            "Continue without Enhanced",
+        ),
+        Err(error) => (
+            format!(
+                "Could not confirm Enhanced support for Yapfast {target}: {error} Updating may leave you with plain Yapfast, without Enhanced settings or plugins. Your saved plugin data stays on disk. Continue anyway?"
+            ),
+            "Continue anyway",
+        ),
+    };
+    a.updates.warning = message;
+    a.updates.continue_text = button.into();
+    if let Some(window) = a.window.upgrade() {
+        show(&window, &a.layout, &a.updates);
+    }
+}
+fn cancel_preflight(adapter: &Rc<RefCell<Adapter>>) {
+    let mut a = adapter.borrow_mut();
+    a.updates.preflight_id = a.updates.preflight_id.wrapping_add(1);
+    a.updates.pending = None;
+    a.updates.preflight_checking = false;
+    a.updates.warning.clear();
+    a.updates.continue_text.clear();
+    if let Some(window) = a.window.upgrade() {
+        show(&window, &a.layout, &a.updates);
+    }
+}
+fn confirm_preflight(adapter: &Rc<RefCell<Adapter>>) {
+    let release = {
+        let mut a = adapter.borrow_mut();
+        if a.updates.preflight_checking {
+            return;
+        }
+        a.updates.pending.take()
+    };
+    if let Some(release) = release {
+        cancel_preflight(adapter);
+        start_install(adapter, release);
+    }
+}
+fn start_install(adapter: &Rc<RefCell<Adapter>>, release: Release) {
+    let mut guard = adapter.borrow_mut();
+    if guard.updates.installing.is_some() || guard.updates.prepared.is_some() {
+        return;
+    }
     guard.updates.install_error.clear();
     let started = install::target(&release).and_then(|target| {
         let client = update::client()?;
@@ -417,10 +541,90 @@ pub(super) fn bind(window: &YapfastWindow, adapter: &Rc<RefCell<Adapter>>) {
         }
     });
     let state = adapter.clone();
-    shown.on_install(move || start_install(&state));
+    shown.on_install(move || request_install(&state));
+    let state = adapter.clone();
+    shown.on_confirm_enhanced_update(move || confirm_preflight(&state));
+    let state = adapter.clone();
+    shown.on_cancel_enhanced_update(move || cancel_preflight(&state));
     let state = adapter.clone();
     shown.on_cancel_install(move || cancel(&state));
     shown.on_open_website(|| browser::open(WEBSITE));
     shown.on_open_github(|| browser::open(GITHUB));
     shown.on_open_discord(|| browser::open(DISCORD));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn destination() -> Release {
+        Release {
+            version: Version::parse("0.5.0").unwrap(),
+            tag: "v0.5.0".into(),
+            page: "https://github.com/yapfast/yapfast/releases/tag/v0.5.0".into(),
+            assets: vec![],
+            notes: String::new(),
+        }
+    }
+    #[test]
+    fn cancellation_discards_late_compatibility_answers_and_cannot_install() {
+        i_slint_backend_testing::init_no_event_loop();
+        let root = tempfile::tempdir().unwrap();
+        let window = YapfastWindow::new().unwrap();
+        let adapter = Adapter::new(
+            Arc::new(BackgroundRuntime::new().unwrap()),
+            root.path().into(),
+            &window,
+        )
+        .unwrap();
+        bind(&window, &adapter);
+        {
+            let mut a = adapter.borrow_mut();
+            a.updates.pending = Some(destination());
+            a.updates.preflight_id = 7;
+            a.updates.preflight_checking = true;
+        }
+        window.global::<Updates>().invoke_confirm_enhanced_update();
+        assert!(adapter.borrow().updates.pending.is_some());
+        assert!(adapter.borrow().updates.installing.is_none());
+        window.global::<Updates>().invoke_cancel_enhanced_update();
+        complete_preflight(&adapter, 7, "v0.5.0", Ok(true));
+        assert!(adapter.borrow().updates.pending.is_none());
+        assert!(adapter.borrow().updates.installing.is_none());
+        assert!(!window.global::<Updates>().get_enhanced_warning());
+    }
+    #[test]
+    fn missing_and_unconfirmed_support_require_explicit_consent() {
+        i_slint_backend_testing::init_no_event_loop();
+        let root = tempfile::tempdir().unwrap();
+        let window = YapfastWindow::new().unwrap();
+        let adapter = Adapter::new(
+            Arc::new(BackgroundRuntime::new().unwrap()),
+            root.path().into(),
+            &window,
+        )
+        .unwrap();
+        bind(&window, &adapter);
+        window.set_settings_open(true);
+        window.set_settings_section(9);
+        window.show().unwrap();
+        window
+            .window()
+            .set_size(slint::LogicalSize::new(1100., 900.));
+        for result in [Ok(false), Err("offline".to_owned()), Ok(true)] {
+            {
+                let mut a = adapter.borrow_mut();
+                a.updates.pending = Some(destination());
+                a.updates.preflight_id = 8;
+                a.updates.preflight_checking = true;
+            }
+            complete_preflight(&adapter, 8, "v0.5.0", result);
+            let shown = window.global::<Updates>();
+            assert!(shown.get_enhanced_warning());
+            assert!(!shown.get_enhanced_checking());
+            assert!(shown.get_enhanced_warning_text().contains("v0.5.0"));
+            assert!(!shown.get_enhanced_continue_text().is_empty());
+            assert!(adapter.borrow().updates.installing.is_none());
+            window.global::<Updates>().invoke_cancel_enhanced_update();
+        }
+    }
 }

@@ -1,0 +1,23 @@
+{
+  "api": 1,
+  "id": "com.example.ping",
+  "name": "Ping",
+  "version": "1.0.0",
+  "description": "Adds /ping, which answers pong to the person who typed it.",
+  "authors": [],
+  "repo": "https://github.com/blockgameentity/yapfast",
+  "path": "plugins/ping",
+  "rev": "cb31511cb33337925a777fec9c05e52399634924",
+  "sha256": "49939e191fd72a30383f77c46ee06b33e5a20cf8258ace517d943d262d93b551",
+  "category": "Utilities",
+  "tags": [
+    "example",
+    "commands"
+  ],
+  "source": "https://github.com/blockgameentity/yapfast@cb31511cb33337925a777fec9c05e52399634924#path=plugins/ping",
+  "license": "GPL-3.0-or-later",
+  "permissions": {
+    "capabilities": [],
+    "network": []
+  }
+}

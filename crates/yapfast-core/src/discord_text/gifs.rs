@@ -17,6 +17,19 @@ pub(super) fn command(
     let Command::Discord(command) = command else {
         return Some(command);
     };
+    if let DiscordCommand::FavoritePreview { src, result } = command {
+        if let Ok(discord) = discord {
+            let discord = discord.clone();
+            tokio::spawn(async move {
+                let picture = tokio::select! {
+                    _ = result.closed() => return,
+                    picture = favorite_picture(&discord, &src, 256, 180) => picture,
+                };
+                let _ = result.send(picture.map(Arc::new));
+            });
+        }
+        return None;
+    }
     let discord = match (&command, discord) {
         (
             DiscordCommand::GifCategories
@@ -384,15 +397,18 @@ async fn download_gif(
     url: &str,
     video_limit: u64,
     limit: u64,
-) -> Result<PathBuf, NoDownload> {
+) -> Result<tempfile::TempPath, NoDownload> {
     use std::io::Seek;
     let target = url.to_owned();
-    let (download, mut file) =
+    let (path, file) =
         tokio::task::spawn_blocking(move || yapfast_discord::cache::gif_download(&target))
             .await
             .ok()
             .flatten()
             .ok_or(NoDownload::Failed)?;
+    let download = tempfile::TempPath::try_from_path(path).map_err(|_| NoDownload::Failed)?;
+    // Close the file before TempPath cleans it up, including on cancellation.
+    let mut file = file;
     let video = yapfast_discord::gifs::small_video(url).map(|video| (video, video_limit));
     let mut end = NoDownload::Failed;
     for (source, limit) in video.into_iter().chain([(url.to_owned(), limit)]) {
@@ -410,8 +426,6 @@ async fn download_gif(
             }
         }
     }
-    drop(file);
-    let _ = std::fs::remove_file(&download);
     Err(end)
 }
 

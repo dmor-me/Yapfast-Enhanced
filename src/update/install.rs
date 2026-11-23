@@ -31,6 +31,10 @@ use std::{
     },
 };
 
+#[cfg(windows)]
+#[path = "enhanced.rs"]
+mod enhanced;
+
 use sha2::{Digest, Sha256};
 use yapfast_core::runtime::BackgroundRuntime;
 
@@ -466,6 +470,25 @@ pub fn windows_command(
 pub fn run_installer(installer: &Path, program: &Path, arguments: &[String]) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    // The official installer was already verified above. A modified existing
+    // installation hands the restart to its pinned manager, which can reapply
+    // a version-matched plugin bundle after the official installer finishes.
+    if let Some(manager) = enhanced::manager(program)? {
+        let folder = program.parent().ok_or("Yapfast has no folder")?;
+        return std::process::Command::new(manager)
+            .arg("managed-update")
+            .arg(folder)
+            .arg(installer)
+            .arg("--")
+            .args(arguments)
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(drop)
+            .map_err(|error| format!("Could not start Enhanced update repair: {error}"));
+    }
     let log = installer.with_extension("log");
     let line = windows_command(installer, program, arguments, &log)
         .ok_or("The update's path has a character the installer can't be started with.")?;

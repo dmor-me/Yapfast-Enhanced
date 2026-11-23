@@ -1,0 +1,7 @@
+{
+  "api": 1,
+  "plugins": [
+    "com.example.ping"
+  ],
+  "delisted": []
+}
