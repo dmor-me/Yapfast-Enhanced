@@ -315,7 +315,11 @@ mod windows {
             assert!(!is_ours(r#""C:\Apps\Discord\Discord.exe" "%1""#));
             assert_eq!(
                 command_line(&[r"C:\Apps\Yapfast\yapfast.exe".into()]),
-                r#""C:\Apps\Yapfast\yapfast.exe" --open-link "%1""#
+                r#"C:\Apps\Yapfast\yapfast.exe --open-link "%1""#
+            );
+            assert_eq!(
+                command_line(&[r"C:\Program Files\Yapfast\yapfast.exe".into()]),
+                r#""C:\Program Files\Yapfast\yapfast.exe" --open-link "%1""#
             );
         }
 

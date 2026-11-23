@@ -1,0 +1,205 @@
+import { Theme, Label, Tip, Middle } from "theme.slint";
+import { ActionButton, IconButton, TextField, Dropdown, Picture } from "controls.slint";
+import { ScrollView } from "scrollview.slint";
+
+export struct MediaNavigation { id: string, name: string, count: int, category: bool, indent: bool, collapsed: bool, editable: bool }
+export struct MediaCard { id: string, label: string, selected: bool, folder-index: int, picture: image, frames: [image], delays: [int], note: string }
+export struct MediaView {
+    available: bool, title: string, query: string,
+    collection-ids: [string], collection-names: [string], collection-index: int, collection-name: string,
+    navigation: [MediaNavigation], active: string, cards: [MediaCard],
+    folder-ids: [string], folder-names: [string], category-ids: [string], category-names: [string],
+    destination-index: int, parent-index: int, total: int, page: int, pages: int,
+    selection-mode: bool, selected-count: int, form-name: string, form-kind: string,
+    edit-id: string, edit-name: string, confirm-text: string, error: string, status: string,
+    virtualize: bool, lazy: bool, pause-offscreen: bool, hover-only: bool
+}
+
+// Rendering and thumbnail loading stay native; actions go to the owning Wasm plugin.
+export global MediaBrowserUi {
+    callback viewport(string, length, length, int);
+}
+
+export component PluginMediaPanel inherits Rectangle {
+    in property <string> plugin;
+    in property <string> owner;
+    in property <MediaView> browser;
+    callback acted(string, string);
+    callback close;
+    background: Theme.chat;
+    border-radius: 12px;
+    clip: true;
+    TouchArea { }
+    focus := FocusScope {
+        init => { self.focus(); }
+        key-pressed(event) => { if event.text == Key.Escape { root.close(); return accept; } return reject; }
+    }
+    VerticalLayout {
+        padding: 20px; spacing: 12px;
+        HorizontalLayout {
+            spacing: 12px;
+            Text { text: root.browser.title; color: Theme.text; font-size: 24px; font-weight: 700; horizontal-stretch: 1; }
+            Text { text: root.owner; color: Theme.muted; font-size: 12px; vertical-alignment: center; }
+            IconButton { icon: @image-url("icons/x.svg"); label: "Close Favorite GIF Folders"; clicked => { root.close(); } }
+        }
+        HorizontalLayout {
+            spacing: 10px;
+            Dropdown { width: 250px; label: "Collection"; model: root.browser.collection-names; current-index: root.browser.collection-index;
+                selected(index, text) => { root.acted("collection", root.browser.collection-ids[index]); } }
+            collection-name := TextField { label: "Collection name"; placeholder: "Collection name"; text: root.browser.collection-name;
+                edited(value) => { root.acted("collection-name", value); } }
+            IconButton { icon: @image-url("icons/pencil.svg"); label: "Rename collection"; clicked => { root.acted("rename-collection", ""); } }
+            IconButton { icon: @image-url("icons/trash-2.svg"); label: "Delete imported collection"; enabled: root.browser.collection-index > 0; clicked => { root.acted("delete-collection", ""); } }
+            ActionButton { text: "Import"; icon: @image-url("icons/arrow-up.svg"); clicked => { root.acted("import", ""); } }
+            ActionButton { text: "Export"; icon: @image-url("icons/download.svg"); clicked => { root.acted("export", ""); } }
+        }
+        if root.browser.error != "": Label { text: root.browser.error; color: Theme.danger-text; }
+        if root.browser.confirm-text != "": HorizontalLayout {
+            spacing: 8px;
+            Label { text: root.browser.confirm-text; horizontal-stretch: 1; }
+            ActionButton { text: "Delete"; clicked => { root.acted("confirm-delete", ""); } }
+            ActionButton { text: "Cancel"; ghost: true; clicked => { root.acted("cancel-delete", ""); } }
+        }
+        if root.browser.edit-id != "": HorizontalLayout {
+            spacing: 8px;
+            TextField { label: "New name"; text: root.browser.edit-name; edited(value) => { root.acted("edit-name", value); } }
+            ActionButton { text: "Save name"; primary: true; clicked => { root.acted("save-name", ""); } }
+            ActionButton { text: "Cancel"; ghost: true; clicked => { root.acted("cancel-name", ""); } }
+        }
+        HorizontalLayout {
+            spacing: 16px;
+            Rectangle {
+                width: 244px; background: Theme.sidebar; border-radius: 8px;
+                VerticalLayout {
+                    padding: 10px; spacing: 8px;
+                    nav-scroll := ScrollView {
+                        vertical-stretch: 1;
+                        content-height: nav.preferred-height;
+                        nav := VerticalLayout {
+                            width: nav-scroll.visible-width; padding-right: 8px; spacing: 3px; alignment: start;
+                            for item in root.browser.navigation: Rectangle {
+                                height: 38px; border-radius: 5px;
+                                background: root.browser.active == item.id ? Theme.accent.with-alpha(0.12) : touch.has-hover ? Theme.hover : transparent;
+                                HorizontalLayout {
+                                    padding-left: item.indent ? 15px : 4px; padding-right: item.editable ? 52px : 4px; spacing: 4px;
+                                    if item.editable && !item.category: Rectangle {
+                                        width: 14px; horizontal-stretch: 0;
+                                        Text { text: "⠿"; color: Theme.muted; vertical-alignment: center; horizontal-alignment: center; }
+                                        drag := TouchArea {
+                                            mouse-cursor: grab;
+                                            pointer-event(event) => {
+                                                if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
+                                                    root.acted("move:" + item.id, round((self.mouse-y - self.pressed-y) / 38px));
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if item.category: Middle {
+                                        width: 14px;
+                                        Image { width: 12px; height: 12px; source: item.collapsed ? @image-url("icons/chevron-right.svg") : @image-url("icons/chevron-down.svg"); colorize: Theme.muted; image-fit: contain; }
+                                    }
+                                    Text { text: item.name; color: Theme.text; font-size: item.category ? 12px : 14px; font-weight: item.category ? 700 : 500; overflow: elide; vertical-alignment: center; horizontal-stretch: 1; }
+                                    Text { text: item.category ? "" : item.count; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
+                                }
+                                touch := TouchArea {
+                                    x: item.editable && !item.category ? 22px : 0px; width: parent.width - self.x - (item.editable ? 48px : 0px);
+                                    mouse-cursor: pointer;
+                                    clicked => { root.acted(item.category ? "collapse:" + item.id : "navigation", item.category ? "" : item.id); }
+                                    changed has-hover => {
+                                        if self.has-hover { Tip.text = item.name; Tip.x = self.absolute-position.x + self.width / 2; Tip.y = self.absolute-position.y; }
+                                        else if Tip.text == item.name { Tip.text = ""; }
+                                    }
+                                }
+                                if item.editable: HorizontalLayout {
+                                    x: parent.width - 48px; width: 48px; alignment: end; spacing: 0px;
+                                    IconButton { size: 24px; glyph: 13px; icon: @image-url("icons/pencil.svg"); label: "Rename " + item.name; clicked => { root.acted("rename:" + item.id, ""); } }
+                                    IconButton { size: 24px; glyph: 13px; icon: @image-url("icons/trash-2.svg"); label: "Delete " + item.name; clicked => { root.acted("delete:" + item.id, ""); } }
+                                }
+                            }
+                        }
+                    }
+                    TextField { label: "Folder or category name"; placeholder: "Folder or category name"; text: root.browser.form-name;
+                        edited(value) => { root.acted("new-name", value); } accepted => { root.acted("create", ""); } }
+                    Dropdown { label: "Create a folder or category"; model: ["Folder", "Category"]; current-index: root.browser.form-kind == "category" ? 1 : 0;
+                        selected(index, value) => { root.acted("new-kind", index == 1 ? "category" : "folder"); } }
+                    Dropdown { label: "Folder category"; model: root.browser.category-names; current-index: root.browser.parent-index;
+                        selected(index, value) => { root.acted("new-parent", root.browser.category-ids[index]); } }
+                    ActionButton { text: "Create"; primary: true; clicked => { root.acted("create", ""); } }
+                    ActionButton { text: "Move folder to category"; enabled: root.browser.active != "all" && root.browser.active != "unfiled";
+                        clicked => { root.acted("move-category", ""); } }
+                }
+            }
+            VerticalLayout {
+                spacing: 10px;
+                search := TextField { label: "Search GIFs"; placeholder: "Search GIFs"; text: root.browser.query;
+                    edited(value) => { search-pause.running = false; search-pause.running = true; }
+                    accepted => { search-pause.running = false; root.acted("query", self.text); } }
+                search-pause := Timer { interval: 200ms; triggered => { self.running = false; root.acted("query", search.text); } }
+                HorizontalLayout {
+                    spacing: 8px;
+                    ActionButton { text: root.browser.selection-mode ? "Done selecting" : "Select GIFs"; clicked => { root.acted("selection-mode", ""); } }
+                    if root.browser.selection-mode: ActionButton { text: "Select all results"; clicked => { root.acted("select-all", ""); } }
+                    if root.browser.selected-count > 0: ActionButton { text: "Clear"; ghost: true; clicked => { root.acted("clear-selection", ""); } }
+                    Text { text: root.browser.selected-count > 0 ? root.browser.selected-count + " selected" : root.browser.total + " GIFs"; color: Theme.secondary; vertical-alignment: center; horizontal-stretch: 1; }
+                    if root.browser.selected-count > 0: Dropdown { width: 180px; label: "Move selected GIFs to"; model: root.browser.folder-names; current-index: root.browser.destination-index;
+                        selected(index, value) => { root.acted("destination", root.browser.folder-ids[index]); } }
+                    if root.browser.selected-count > 0: ActionButton { text: "Move selected"; primary: true; clicked => { root.acted("assign-many", ""); } }
+                }
+                gallery := Flickable {
+                    vertical-stretch: 1;
+                    property <int> columns: max(1, floor((self.width - 12px) / 190px));
+                    property <length> cell-width: (self.width - 12px) / self.columns;
+                    content-height: ceil(root.browser.cards.length / self.columns) * 210px;
+                    function report() { MediaBrowserUi.viewport(root.plugin, -self.content-y, self.height, self.columns); }
+                    init => { self.report(); }
+                    changed content-y => { self.report(); }
+                    changed height => { self.report(); }
+                    changed columns => { self.report(); }
+                    for card[index] in root.browser.cards: media-tile := Rectangle {
+                        property <length> top: floor(index / gallery.columns) * 210px;
+                        property <bool> in-view: self.top + 210px >= -gallery.content-y - 210px && self.top <= -gallery.content-y + gallery.height + 210px;
+                        x: mod(index, gallery.columns) * gallery.cell-width; y: self.top; width: gallery.cell-width - 8px; height: 202px;
+                        visible: !root.browser.virtualize || self.in-view;
+                        if !root.browser.virtualize || self.in-view: Rectangle {
+                            background: Theme.panel; border-radius: 7px; clip: true;
+                            border-width: card.selected ? 2px : 0px; border-color: Theme.accent;
+                            Picture {
+                                y: 0px; width: parent.width; height: 150px; image-fit: cover; still: card.picture;
+                                frames: ((!root.browser.pause-offscreen || media-tile.in-view) && (!root.browser.hover-only || hover.has-hover)) ? card.frames : [];
+                                delays: card.delays;
+                            }
+                            hover := TouchArea {
+                                height: 150px; mouse-cursor: pointer;
+                                pointer-event(event) => {
+                                    if event.kind == PointerEventKind.up && event.button == PointerEventButton.left && self.has-hover {
+                                        root.acted((root.browser.selection-mode ? "toggle:" : event.modifiers.shift ? "draft:" : "pick:") + card.id, "");
+                                    }
+                                }
+                            }
+                            if root.browser.selection-mode: Rectangle {
+                                x: 8px; y: 8px; width: 22px; height: 22px; border-radius: 4px;
+                                background: card.selected ? Theme.accent : Theme.panel; border-width: 1px; border-color: Theme.edge;
+                                Text { text: card.selected ? "✓" : ""; color: Theme.on-accent; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                            VerticalLayout {
+                                y: 150px; height: 52px; padding-left: 6px; padding-right: 6px; padding-top: 6px;
+                                Dropdown { label: "Folder for " + card.label; small: true; model: root.browser.folder-names; current-index: card.folder-index;
+                                    selected(index, value) => { root.acted("assign:" + card.id, root.browser.folder-ids[index]); } }
+                            }
+                            if card.note != "": Text { x: 6px; y: 6px; width: parent.width - 12px; text: card.note; wrap: word-wrap; color: Theme.secondary; font-size: 11px; }
+                        }
+                    }
+                    if root.browser.cards.length == 0: Text { text: root.browser.status != "" ? root.browser.status : "No GIFs match this view."; color: Theme.secondary; wrap: word-wrap; }
+                }
+                HorizontalLayout {
+                    spacing: 8px;
+                    ActionButton { text: "Previous"; enabled: root.browser.page > 0; clicked => { root.acted("previous-page", ""); } }
+                    Text { text: "Page " + (root.browser.page + 1) + " of " + root.browser.pages; color: Theme.muted; vertical-alignment: center; }
+                    ActionButton { text: "Next"; enabled: root.browser.page + 1 < root.browser.pages; clicked => { root.acted("next-page", ""); } }
+                    Label { text: root.browser.status; horizontal-stretch: 1; }
+                    ActionButton { text: "Refresh favorites"; ghost: true; clicked => { root.acted("refresh", ""); } }
+                }
+            }
+        }
+    }
+}

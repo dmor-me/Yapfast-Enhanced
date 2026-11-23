@@ -1180,7 +1180,11 @@ impl Games {
         // In /tmp, as a socket's path must stay under 108 bytes.
         let directory = tempfile::Builder::new()
             .prefix("yapfast-rpc")
-            .tempdir_in("/tmp")
+            .tempdir_in(if cfg!(windows) {
+                std::env::temp_dir()
+            } else {
+                std::path::PathBuf::from("/tmp")
+            })
             .unwrap();
         let paths = [
             directory.path().to_owned(),

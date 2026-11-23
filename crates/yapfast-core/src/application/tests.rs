@@ -269,6 +269,7 @@ fn members_belong_to_the_selected_text_room() {
     app.dispatch(Action::Navigate(Navigation::Server("friends".into())));
     assert!(app.state.lists_members() && app.state.members.is_none());
     let member = ChatMember {
+        bot: false,
         id: "@bob:test".into(),
         name: "Bob".into(),
         username: None,
@@ -2938,6 +2939,7 @@ fn asks_once_for_the_pictures_on_screen() {
 
 fn member(id: &str, name: &str) -> ChatMember {
     ChatMember {
+        bot: false,
         id: id.into(),
         name: name.into(),
         username: None,
@@ -3168,6 +3170,7 @@ fn discord_mentions_search_the_server_and_name_roles() {
         room: room.clone(),
         members: Ok(vec![
             ChatMember {
+                bot: false,
                 username: Some("bob".into()),
                 ..member("2", "Bob")
             },
@@ -3835,6 +3838,7 @@ fn matrix_profiles_show_what_the_member_list_knows() {
     app.apply(Event::Members {
         room: "general".into(),
         members: Ok(vec![ChatMember {
+            bot: false,
             id: "@bob:test".into(),
             name: "Bob".into(),
             username: None,

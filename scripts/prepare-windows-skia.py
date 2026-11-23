@@ -724,7 +724,8 @@ def prepare_toolchain(jobs):
     set_env(environment, 'SKIA_GN_ARGS', gn_args)
     set_env(environment, 'SKIA_GN_COMMAND', gn)
     set_env(environment, 'SKIA_NINJA_COMMAND', ninja_wrapper)
-    set_env(environment, 'BUILD_ARTIFACTSTAGINGDIRECTORY', WORK / 'export')
+    # Export our pinned external source below; upstream assumes registry/skia/LICENSE.
+    environment.pop('BUILD_ARTIFACTSTAGINGDIRECTORY', None)
     set_env(environment, 'CARGO_TARGET_DIR', '.local/windows/skia/target')
     set_env(environment, 'RUSTFLAGS', '-C target-feature=+crt-static')
     # Source mode builds locally regardless of a user-level Cargo cache URL.

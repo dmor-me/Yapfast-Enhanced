@@ -15,6 +15,26 @@ pub(super) const PREVIEW_CACHE_BYTES: usize = 8 * 1024 * 1024;
 pub(super) type SharedPreviews = Arc<Mutex<PreviewCache>>;
 
 impl PreviewCache {
+    pub(super) fn clear_unused(&mut self) {
+        self.pictures
+            .retain(|(_, picture)| Arc::strong_count(picture) > 1);
+        self.bytes = self
+            .pictures
+            .iter()
+            .map(|(_, picture)| picture.rgba.len())
+            .sum();
+    }
+
+    fn remove_exclusive(&mut self, released: &HashSet<String>, shared: &HashSet<String>) {
+        self.pictures
+            .retain(|(url, _)| !released.contains(url) || shared.contains(url));
+        self.bytes = self
+            .pictures
+            .iter()
+            .map(|(_, picture)| picture.rgba.len())
+            .sum();
+    }
+
     pub(super) fn get(&mut self, url: &str) -> Option<Arc<Picture>> {
         let index = self.pictures.iter().position(|(key, _)| key == url)?;
         let kept = self.pictures.remove(index).unwrap();
@@ -50,6 +70,10 @@ pub struct Channels {
     /// Newest last.
     pub(super) recent: Vec<OpenChannel>,
     pub(super) previews: SharedPreviews,
+    release_dms: bool,
+    release_servers: bool,
+    /// Sends outlive the timeline, including failed sends the user may retry.
+    pub(super) dm_sends: HashMap<String, Vec<open_channel::Pending>>,
     /// Who is typing in each channel, by user id, with their name and until when.
     pub(super) typing: HashMap<String, HashMap<String, (String, Instant)>>,
     /// Where this account last told Discord it's typing, and when.
@@ -80,15 +104,32 @@ impl Channels {
         });
     }
 
-    pub(super) fn close(&mut self) {
+    pub(super) fn close(&mut self, next: Option<&str>) {
         let channel = self.open.take();
-        self.keep(channel);
+        if let Some(channel) = channel {
+            if ((self.release_dms && channel.guild == discord::DM_GUILD)
+                || (self.release_servers && channel.guild != discord::DM_GUILD))
+                && next != Some(channel.room.as_str())
+            {
+                self.release_dm(channel);
+            } else {
+                self.keep(Some(channel));
+            }
+        }
     }
 
     /// Stops showing the thread beside the open channel.
     pub(super) fn close_aside(&mut self) {
         let channel = self.aside.take();
-        self.keep(channel);
+        if let Some(channel) = channel {
+            if (self.release_dms && channel.guild == discord::DM_GUILD)
+                || (self.release_servers && channel.guild != discord::DM_GUILD)
+            {
+                self.release_dm(channel);
+            } else {
+                self.keep(Some(channel));
+            }
+        }
     }
 
     /// Keeps a channel that closed among the recent ones.
@@ -98,8 +139,57 @@ impl Channels {
             self.recent.push(channel);
             if self.recent.len() > KEPT_CHANNELS {
                 let mut gone = self.recent.remove(0);
-                save(gone.take_changes());
+                save(gone.take_changes(), gone.guild == discord::DM_GUILD);
             }
+        }
+    }
+
+    pub(super) fn set_release_dms(&mut self, release: bool) {
+        self.release_dms = release;
+        if release {
+            let (direct, others): (Vec<_>, Vec<_>) = std::mem::take(&mut self.recent)
+                .into_iter()
+                .partition(|channel| channel.guild == discord::DM_GUILD);
+            self.recent = others;
+            for channel in direct {
+                self.release_dm(channel);
+            }
+        }
+    }
+
+    pub(super) fn set_release_servers(&mut self, release: bool) {
+        self.release_servers = release;
+        if release {
+            let (servers, others): (Vec<_>, Vec<_>) = std::mem::take(&mut self.recent)
+                .into_iter()
+                .partition(|channel| channel.guild != discord::DM_GUILD);
+            self.recent = others;
+            for channel in servers {
+                self.release_dm(channel);
+            }
+        }
+    }
+
+    fn release_dm(&mut self, mut channel: OpenChannel) {
+        let previews = channel.preview_sources();
+        if !previews.is_empty() {
+            let shared: HashSet<String> = self
+                .open
+                .iter()
+                .chain(&self.aside)
+                .chain(&self.recent)
+                .flat_map(OpenChannel::preview_sources)
+                .collect();
+            self.previews
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .remove_exclusive(&previews, &shared);
+        }
+        // Commit the most recent snapshot before a rapid return can read it.
+        save(channel.take_changes(), true);
+        if !channel.pending.is_empty() {
+            self.dm_sends
+                .insert(channel.room.clone(), std::mem::take(&mut channel.pending));
         }
     }
 
@@ -135,7 +225,7 @@ impl Channels {
             .chain(&mut self.aside)
             .chain(&mut self.recent)
         {
-            save(channel.take_changes());
+            save(channel.take_changes(), channel.guild == discord::DM_GUILD);
         }
     }
 
@@ -172,12 +262,17 @@ impl Channels {
     }
 }
 
-/// Writes a channel's messages to disk, off the async threads.
-pub(super) fn save(saved: Option<(String, Vec<Message>)>) {
+/// DM snapshots are written in actor order so an older periodic write cannot
+/// overwrite a newer snapshot when a closed DM is immediately reopened.
+fn save(saved: Option<(String, Vec<Message>)>, direct: bool) {
     if let Some((channel, messages)) = saved {
-        tokio::task::spawn_blocking(move || {
-            yapfast_discord::cache::save_messages(&channel, messages)
-        });
+        if direct {
+            yapfast_discord::cache::save_messages(&channel, messages);
+        } else {
+            tokio::task::spawn_blocking(move || {
+                yapfast_discord::cache::save_messages(&channel, messages)
+            });
+        }
     }
 }
 
@@ -190,6 +285,21 @@ mod tests {
             rgba: crate::chat::Pixels::new(0, 0, vec![0; bytes]),
             ..Default::default()
         })
+    }
+
+    #[test]
+    fn releasing_unused_previews_preserves_shared_images() {
+        let mut cache = PreviewCache::default();
+        let shared = picture(32);
+        cache.insert("visible".into(), shared.clone());
+        cache.insert("unused".into(), picture(64));
+        cache.clear_unused();
+        assert_eq!(cache.bytes, 32);
+        assert!(cache.get("unused").is_none());
+        assert!(Arc::ptr_eq(&shared, &cache.get("visible").unwrap()));
+        drop(shared);
+        cache.clear_unused();
+        assert_eq!(cache.bytes, 0);
     }
 
     #[test]

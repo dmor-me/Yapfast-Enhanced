@@ -18,3 +18,7 @@ __pycache__/
 /deploy/
 /DESIGN.md
 /PRODUCT.md
+
+# Compatibility build output; never include it in a source commit.
+/target-manager/
+/.release/

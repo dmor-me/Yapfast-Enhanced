@@ -2821,6 +2821,11 @@ impl Discord {
         self.read_names().username(user).map(str::to_owned)
     }
 
+    /// Whether Discord identifies this user as a bot.
+    pub fn is_bot(&self, user: &str) -> bool {
+        self.read_names().is_bot(user)
+    }
+
     /// The address of a user's avatar, in a server or in DMs.
     pub fn avatar(&self, guild: Option<&str>, user: &str) -> String {
         self.read_names().avatar(guild.and_then(server), user)

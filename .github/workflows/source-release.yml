@@ -1,0 +1,32 @@
+name: Source release checks
+
+on:
+  push:
+    tags: ["v*.*.*.*"]
+    branches: [main, "compat/**"]
+  pull_request:
+    branches: [main, "compat/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Check release source and required files
+        run: python3 scripts/check-enhanced-source.py
+      - name: Check documentation links
+        run: python3 scripts/check-doc-links
+      - name: Check WebAssembly fixtures
+        run: python3 scripts/check-plugin-fixtures
+      - name: Check installer-manager source and packaging tests
+        run: python3 -m unittest discover -s testing -p test_enhanced_release.py

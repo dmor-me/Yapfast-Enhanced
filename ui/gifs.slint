@@ -1,3 +1,4 @@
+import { PluginPart, PluginButtons } from "plugins.slint";
 import { Theme, Tip } from "theme.slint";
 import { IconButton, TextField, Picture } from "controls.slint";
 
@@ -65,6 +66,8 @@ export component FavoriteStar inherits Rectangle {
 // found, in columns. A click sends a GIF; Shift and a click puts it in the
 // message. The star keeps it among the favourites.
 export component GifPicker inherits VerticalLayout {
+    in property <[PluginPart]> plugin-buttons;
+    callback plugin-acted(string,string,string,string,string);
     /// 0 the home, 1 trending, 2 favourites, 3 a search's results.
     in property <int> view;
     in-out property <string> query;
@@ -150,6 +153,10 @@ export component GifPicker inherits VerticalLayout {
                 accepted => { pause.running = false; root.search(root.query); }
             }
         }
+    }
+    if root.plugin-buttons.length > 0: PluginButtons {
+        parts: root.plugin-buttons;
+        acted(plugin,slot,id,value,subject) => { root.plugin-acted(plugin,slot,id,value,subject); }
     }
     grid := Flickable {
         vertical-stretch: 1;
